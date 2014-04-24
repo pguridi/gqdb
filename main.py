@@ -238,6 +238,8 @@ class DebuggerGTKGui:
 
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
+        if self._current_file != filename:
+            return
         self.buffer.place_cursor(self.buffer.get_iter_at_line(lineno - 1))
         self.sourceview.set_highlight_current_line(True)
         self.buffer.create_source_mark(None, "2", self.buffer.get_iter_at_line(lineno - 1))
