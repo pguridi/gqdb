@@ -235,10 +235,9 @@ class DebuggerGTKGui:
         it = self._console_textbuffer.get_iter_at_line(self._console_textbuffer.get_line_count() - 1)
         tmark = self._console_textbuffer.create_mark("eot", it, False)
         self._console_textview.scroll_to_mark(tmark, 0, False, 0, 0)
-                
+
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
-        print("context: ", context)
         self.buffer.place_cursor(self.buffer.get_iter_at_line(lineno - 1))
         self.sourceview.set_highlight_current_line(True)
         self.buffer.create_source_mark(None, "2", self.buffer.get_iter_at_line(lineno - 1))
