@@ -1,4 +1,4 @@
 gqdb
 ====
 
-Simple Gtk frontend for the QDB Python Debugger
+A Python Debugger for Gedit 3
