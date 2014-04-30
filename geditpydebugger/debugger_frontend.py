@@ -1,20 +1,16 @@
-#!/usr/bin/env python
-# coding:utf-8
-
 from multiprocessing.connection import Client
 
 import os
 import time
 
 import threading
-import qdb
+from .qdb import Qdb, Frontend
 
-from breakpoint import LineBreakpoint
+from .breakpoint import LineBreakpoint
+from .events import EventManager, Event
 
 
-from events import EventManager, Event
-
-class LoggingPipeWrapper(object):
+class LoggingPipeWrapper:
     
     def __init__(self, pipe):
         self.__pipe = pipe
@@ -35,11 +31,11 @@ class LoggingPipeWrapper(object):
         return self.__pipe.poll()
 
         
-class CallbackFrontend(qdb.Frontend):
+class CallbackFrontend(Frontend):
     "A callback driven Frontend interface to qdb"
 
     def __init__(self, pipe=None):
-        qdb.Frontend.__init__(self, pipe)
+        Frontend.__init__(self, pipe)
         self._em = EventManager()
         self._em.add_event(Event('breakpoint-reached'))
         self._em.add_event(Event('write'))
@@ -78,7 +74,7 @@ class CallbackFrontend(qdb.Frontend):
         print("enabling call_stack and environment at interaction")
         self.set_params(dict(call_stack=True, environment=True, postmortem=True))
         # return control to the backend:
-        qdb.Frontend.startup(self)
+        Frontend.startup(self)
 
     def write(self, text):
         "ouputs a message (called by the backend)"
@@ -134,6 +130,7 @@ class CallbackFrontend(qdb.Frontend):
         try:
             while True:
                 if self.closing:
+                    print("Closing thread..")
                     return True
                 time.sleep(0.01)
                 if self.attached and self.pipe:
@@ -142,12 +139,15 @@ class CallbackFrontend(qdb.Frontend):
         except EOFError:
             print("DEBUGGER disconnected...")
             self.detach()
+            self.closing = True
         except IOError as e:
             print(("DEBUGGER connection exception:", e))
             self.detach()
+            self.closing = True
         except Exception as e:
             # print the exception message and close (avoid recursion)
             print(("DEBUGGER exception", e))
+            self.closing = True
             import traceback
             traceback.print_exc()
             import sys;
@@ -184,6 +184,7 @@ class CallbackFrontend(qdb.Frontend):
         "Decorator for mutually exclusive functions"
         def check_fn(self, *args, **kwargs):
             if not self.interacting or not self.pipe or not self.attached:
+                print(self.pipe, self.attached)
                 print("not interacting! reach a breakpoint or interrupt the running code (CTRL+I)")
             else:
                 # do not execute if edited (code editions must be checked)
@@ -303,6 +304,7 @@ class CallbackFrontend(qdb.Frontend):
     @check_interaction
     def Step(self):
         "Execute until the next instruction (entering to functions)"
+        print("> Stepin")
         self.do_step()
 
     @check_interaction
@@ -313,6 +315,7 @@ class CallbackFrontend(qdb.Frontend):
     @check_interaction
     def Next(self):
         "Execute until the next line (not entering to functions)"
+        print("-> Next")
         self.do_next()
 
     @force_interaction
@@ -341,6 +344,7 @@ class CallbackFrontend(qdb.Frontend):
             self.do_set_breakpoint(bk.fn, bk.line, bk.temporary, None)
 
     def SetBreakpointOffline(self, filename, lineno, temporary=0, cond=None):
+        print("Adding breakpoint: ", filename, lineno)
         self._breakpoints.add(LineBreakpoint(filename, lineno, temporary))
     
     @force_interaction
