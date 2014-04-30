@@ -44,7 +44,7 @@ class ContextBox(Gtk.HPaned):
         self._variables_treestore = builder.get_object("variables_treestore")
 
         self.pack1(self._console_box, True, False)
-        self.pack2(self._context_notebook, False, True)
+        self.pack2(self._context_notebook, True, True)
 
     def set_context(self, context):
         self._variables_treestore.clear()
