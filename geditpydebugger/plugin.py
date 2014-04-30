@@ -6,7 +6,7 @@ import subprocess
 MODULE_DIRECTORY = os.path.dirname(__file__)
 
 from .debugger_frontend import CallbackFrontend
-from .components import ContextBox
+from .components import ContextBox, InterpretersDialog
 
 from distutils.version import StrictVersion as V
 from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
@@ -36,7 +36,8 @@ PYTHON_RUNTIMES = []
 for py in ['python2', 'python3']:
     try:
         out = subprocess.check_output("%s --version" % str(py), shell=True)
-        PYTHON_RUNTIMES.append(py)
+        py_path = subprocess.check_output("which %s" % str(py), shell=True)
+        PYTHON_RUNTIMES.append([py, py_path.decode("utf-8").strip("\n")])
     except subprocess.CalledProcessError as e:
         print("Error: ", e)
 
@@ -198,6 +199,12 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         panel.remove(self._context_box)
 
     def execute(self, file_path):
+        # ask for interpreter
+        diag = InterpretersDialog(PYTHON_RUNTIMES)
+        pythexec = diag.run()
+        if not pythexec:
+            return
+
         DEBUGGER.get_frontend().init(1)
         cdir, filen = os.path.split(file_path)
         if not cdir:
@@ -205,7 +212,6 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         cwd = os.getcwd()
         try:
             os.chdir(cdir)
-            pythexec = sys.executable
             print("Executing: %s" % file_path)
             qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb.py')
             proc = subprocess.Popen([pythexec + " -u " + qdb_path + ' ' + file_path],
@@ -235,11 +241,11 @@ class GqdbPluginViewActivatable(GObject.Object, Gedit.ViewActivatable):
         self.view.set_show_line_marks(True)
         source_attrs = GtkSource.MarkAttributes()
         source_attrs.set_pixbuf(BREAKPOINT_PIXBUF)
-        self.view.set_mark_attributes("1", source_attrs, 2)
+        self.view.set_mark_attributes("1", source_attrs, 1)
 
         source_attrs = GtkSource.MarkAttributes()
         source_attrs.set_pixbuf(CURRENT_STEP_PIXBUF)
-        self.view.set_mark_attributes("2", source_attrs, 1)
+        self.view.set_mark_attributes("2", source_attrs, 2)
 
         self.view.connect('button-press-event', self.button_press_cb)
 
