@@ -140,21 +140,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
             gfile = Gio.File.new_for_path(filename)
             self.window.create_tab_from_location(gfile, None, lineno, 0, False, True)
 
-        return
-
-        # # Add context
-        # globals_it = self._variables_treestore.append(None, [self._variable_pixbuf,
-        #                                                      "Globals", "Global variables"])
-        # for g in context['environment']['globals'].keys():
-        #     val, vtype = context['environment']['globals'][g]
-        #     it = self._variables_treestore.append(globals_it, [self._variable_pixbuf,
-        #                                                        g, vtype + ': ' + val])
-        #
-        # # now add locals
-        # for k in context['environment']['locals'].keys():
-        #     val, vtype = context['environment']['locals'][k]
-        #     it = self._variables_treestore.append(None, [self._variable_pixbuf,
-        #                                                  k, vtype + ': ' + val])
+        self._context_box.set_context(context)
 
     def clear_markers(self):
         for doc in self.window.get_documents():
