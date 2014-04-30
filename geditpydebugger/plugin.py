@@ -11,8 +11,12 @@ from .components import ContextBox
 from distutils.version import StrictVersion as V
 from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
 
-output = subprocess.check_output(["gedit", "--version"])
-GEDIT_VERSION = re.search('\d+(\.\d+)+', str(output)).group(0)
+
+proc = subprocess.Popen('gedit --version', shell=True, 
+    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+(stdout, stderr) = proc.communicate()
+    
+GEDIT_VERSION = re.search('\d+(\.\d+)+', str(stdout)).group(0)
 if not GEDIT_VERSION:
     print("Could not determine Gedit version")
 else:
@@ -75,9 +79,12 @@ class GqdbPluginAppActivatable(GObject.Object, Gedit.AppActivatable):
         self.app.add_accelerator("F4", "win.step_in", None)
         self.app.add_accelerator("F5", "win.continue", None)
 
-        self.menu_ext = self.extend_menu("tools-section")
-        item = Gio.MenuItem.new(("Debug"), "win.gqdb")
-        self.menu_ext.prepend_menu_item(item)
+        if GEDIT_VERSION < V("3.12"):
+            print("Need to implement menus for gedit <3.10")
+        else:
+            self.menu_ext = self.extend_menu("tools-section")
+            item = Gio.MenuItem.new(("Debug"), "win.gqdb")
+            self.menu_ext.prepend_menu_item(item)
 
     def do_deactivate(self):
         self.app.remove_accelerator("win.gqdb", None)
@@ -159,7 +166,10 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         panel = self.window.get_bottom_panel()
         self._context_box = ContextBox()
 
-        panel.add_titled(self._context_box, "ExampleSidePanel", "Debugger")
+        if GEDIT_VERSION < V("3.12"):
+            panel.add_item(self._context_box, "debuggerpanel", "Debugger name", None)
+        else:
+            panel.add_titled(self._context_box, "ExampleSidePanel", "Debugger")
         panel.show_all()
 
         DEBUGGER.set_window(self.window)
