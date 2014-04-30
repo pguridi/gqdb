@@ -1,14 +1,30 @@
 import os
+import re
 import sys
 import time
 import subprocess
-mod_directory = os.path.dirname(__file__)
+MODULE_DIRECTORY = os.path.dirname(__file__)
 
 from .debugger_frontend import CallbackFrontend
 from .components import ContextBox
 
+from distutils.version import StrictVersion as V
 from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
 
+output = subprocess.check_output(["gedit", "--version"])
+GEDIT_VERSION = re.search('\d+(\.\d+)+', str(output)).group(0)
+if not GEDIT_VERSION:
+    print("Could not determine Gedit version")
+else:
+    GEDIT_VERSION = V(GEDIT_VERSION)
+
+if GEDIT_VERSION < V("3.10"):
+    print("Gedit version not compatible. Version 3.10 or higher is required but %s detected." % GEDIT_VERSION)
+else:
+    print("Gedit version: %s" % GEDIT_VERSION)
+
+BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
+CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "step_current.png"))
 
 ui_str = """<ui>
 <menubar name="MenuBar">
@@ -46,7 +62,6 @@ class GDebugger:
 
 DEBUGGER = GDebugger()
 
-
 class GqdbPluginAppActivatable(GObject.Object, Gedit.AppActivatable):
 
     app = GObject.property(type=Gedit.App)
@@ -78,7 +93,6 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
 
     def __init__(self):
         GObject.Object.__init__(self)
-        self._breakpoint_pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(mod_directory, "images/breakpoint.png"))
 
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
@@ -168,7 +182,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
             os.chdir(cdir)
             pythexec = sys.executable
             print("Executing: %s" % file_path)
-            qdb_path = os.path.join(mod_directory, 'qdb.py')
+            qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb.py')
             proc = subprocess.Popen([pythexec + " -u " + qdb_path + ' ' + file_path],
              shell=True, close_fds=True)
             time.sleep(0.5)
@@ -194,14 +208,12 @@ class GqdbPluginViewActivatable(GObject.Object, Gedit.ViewActivatable):
 
     def do_activate(self):
         self.view.set_show_line_marks(True)
-        bk_pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(mod_directory, "images", "breakpoint.png"))
         source_attrs = GtkSource.MarkAttributes()
-        source_attrs.set_pixbuf(bk_pixbuf)
+        source_attrs.set_pixbuf(BREAKPOINT_PIXBUF)
         self.view.set_mark_attributes("1", source_attrs, 2)
 
-        current_step_pixbuf = GdkPixbuf.Pixbuf.new_from_file(os.path.join(mod_directory, "images", "step_current.png"))
         source_attrs = GtkSource.MarkAttributes()
-        source_attrs.set_pixbuf(current_step_pixbuf)
+        source_attrs.set_pixbuf(CURRENT_STEP_PIXBUF)
         self.view.set_mark_attributes("2", source_attrs, 1)
 
         self.view.connect('button-press-event', self.button_press_cb)
