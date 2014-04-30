@@ -242,7 +242,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
     def do_update_state(self):
         pass
 
-    def debug(self, action):
+    def debug(self, action=None):
         active_document = self.window.get_active_document()
         doc_location = active_document.get_location()
         if not doc_location:
