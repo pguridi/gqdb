@@ -11,12 +11,15 @@ from .components import ContextBox
 from distutils.version import StrictVersion as V
 from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
 
-
+def get_version_from_str(version_str):
+    return re.search('\d+(\.\d+)+', str(version_str)).group(0)
+    
+# Get the gedit version
 proc = subprocess.Popen('gedit --version', shell=True, 
     stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 (stdout, stderr) = proc.communicate()
     
-GEDIT_VERSION = re.search('\d+(\.\d+)+', str(stdout)).group(0)
+GEDIT_VERSION = get_version_from_str(stdout)
 if not GEDIT_VERSION:
     print("Could not determine Gedit version")
 else:
@@ -26,6 +29,18 @@ if GEDIT_VERSION < V("3.10"):
     print("Gedit version not compatible. Version 3.10 or higher is required but %s detected." % GEDIT_VERSION)
 else:
     print("Gedit version: %s" % GEDIT_VERSION)
+
+
+PYTHON_RUNTIMES = []
+# Get the installed interpreters #TODO: do something less ugly
+for py in ['python2', 'python3']:
+    try:
+        out = subprocess.check_output("%s --version" % str(py), shell=True)
+        PYTHON_RUNTIMES.append(py)
+    except subprocess.CalledProcessError as e:
+        print("Error: ", e)
+
+print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 
 BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
 CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "step_current.png"))
