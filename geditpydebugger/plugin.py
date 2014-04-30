@@ -46,20 +46,22 @@ print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
 CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "step_current.png"))
 
-ui_str = """<ui>
+menu_ui_str = """<ui>
+<toolbar name="ToolBar">
+<separator />
+<placeholder name="Debug">
+<toolitem name="Debug" action="gqdb" />
+</placeholder>
+</toolbar>
 <menubar name="MenuBar">
-<menu name="ViewMenu" action="View">
-<placeholder name="ViewOps_2">
-<menuitem name="ToggleTextWrappingMenuItem" action="ToggleTextWrappingPluginToggle" />
+<menu name="ToolsMenu" action="Tools">
+<placeholder name="ToolsOps_2">
+<menuitem name="Debug" action="gqdb" />
 </placeholder>
 </menu>
 </menubar>
-<toolbar name="ToolBar">
-<separator />
-<toolitem name="ToggleTextWrappingToolItem" action="ToggleTextWrappingPluginToggle" />
-</toolbar>
-</ui>
-"""
+</ui>"""
+
 
 def idle_add_decorator(func):
     def callback(*args):
@@ -116,6 +118,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
 
     def __init__(self):
         GObject.Object.__init__(self)
+        self._ui_id = None
 
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
@@ -160,7 +163,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
 
     def do_activate(self):
         action = Gio.SimpleAction(name="gqdb")
-        action.connect('activate', lambda a, p: self.debug(self.window.get_active_document()))
+        action.connect('activate', lambda a, p: self.debug())
         action.connect('activate', lambda a, p: self.clear_markers())
         self.window.add_action(action)
 
@@ -183,11 +186,21 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         self._context_box = ContextBox()
 
         if GEDIT_VERSION < V("3.12"):
-            panel.add_item(self._context_box, "debuggerpanel", "Debugger name", None)
-        else:
-            panel.add_titled(self._context_box, "ExampleSidePanel", "Debugger")
-        panel.show_all()
+            manager = self.window.get_ui_manager()
+            # Create a new action group
+            self._action_group = Gtk.ActionGroup("DebuggerActions")
+            self._action_group.add_actions([("gqdb", Gtk.STOCK_EXECUTE, _("Debug"),
+                                            None, _("Debug"),
+                                            self.debug)])
 
+            # Insert the action group
+            manager.insert_action_group(self._action_group, -1)
+            self._ui_id = manager.add_ui_from_string(menu_ui_str)
+            panel.add_item(self._context_box, "debuggerpanel", "Python debugger", None)
+        else:
+            panel.add_titled(self._context_box, "debuggerpanel", "Python debugger")
+        panel.show_all()
+        
         DEBUGGER.set_window(self.window)
 
         DEBUGGER.get_frontend().connect_signal('write', self._context_box.write_stdout)
@@ -197,6 +210,9 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         self.window.remove_action("gqdb")
         panel = self.window.get_bottom_panel()
         panel.remove(self._context_box)
+        if GEDIT_VERSION < V("3.10"):
+            manager = self.window.get_ui_manager()
+            manager.remove_ui(self._ui_id)
 
     def execute(self, file_path):
         # ask for interpreter
@@ -226,7 +242,8 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
     def do_update_state(self):
         pass
 
-    def debug(self, active_document):
+    def debug(self, action):
+        active_document = self.window.get_active_document()
         doc_location = active_document.get_location()
         if not doc_location:
             return
