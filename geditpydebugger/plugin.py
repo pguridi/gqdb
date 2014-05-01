@@ -1,9 +1,15 @@
 import os
 import re
 import sys
+
+
 import time
 import subprocess
 MODULE_DIRECTORY = os.path.dirname(__file__)
+
+sys.path.append(os.path.join(MODULE_DIRECTORY, "libs"))
+
+QDB_LAUNCHER_PATH = os.path.join(MODULE_DIRECTORY, "libs", "qdb.py")
 
 from .debugger_frontend import CallbackFrontend
 from .components import ContextBox, InterpretersDialog
@@ -121,6 +127,11 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         self._ui_id = None
 
     @idle_add_decorator
+    def _clear_interaction(self, sender):
+        self.clear_markers()
+        self._context_box.clear()
+
+    @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
         lineno -= 1
         current_doc = DEBUGGER.WINDOW.get_active_document().get_location()
@@ -191,6 +202,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
 
         DEBUGGER.get_frontend().connect_signal('write', self._context_box.write_stdout)
         DEBUGGER.get_frontend().connect_signal('mark-current-line', self.mark_current_line)
+        DEBUGGER.get_frontend().connect_signal('clear-interaction', self._clear_interaction)
 
     def do_deactivate(self):
         self.window.remove_action("gqdb")
@@ -215,8 +227,9 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         try:
             os.chdir(cdir)
             print("Executing: %s" % file_path)
-            qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb.py')
-            proc = subprocess.Popen([pythexec + " -u " + qdb_path + ' ' + file_path],
+            #qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb', 'qdb_launcher.py')
+            print("QDB path: ", QDB_LAUNCHER_PATH)
+            proc = subprocess.Popen([pythexec + " -u " + QDB_LAUNCHER_PATH + ' ' + file_path],
              shell=True, close_fds=True)
             time.sleep(0.5)
             DEBUGGER.get_frontend().attach()

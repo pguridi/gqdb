@@ -46,6 +46,9 @@ class ContextBox(Gtk.HPaned):
         self.pack1(self._console_box, True, False)
         self.pack2(self._context_notebook, True, True)
 
+    def clear(self):
+        self._variables_treestore.clear()
+
     def set_context(self, context):
         self._variables_treestore.clear()
         globals_it = self._variables_treestore.append(None, [VARIABLE_PIXBUF,

@@ -3,18 +3,23 @@ from multiprocessing.connection import Client
 import os
 import time
 
+import sys
+
 import threading
-from .qdb import Qdb, Frontend
+import sys
+
+print(sys.path)
+from qdb import *
 
 from .breakpoint import LineBreakpoint
 from .events import EventManager, Event
 
 
 class LoggingPipeWrapper:
-    
+
     def __init__(self, pipe):
         self.__pipe = pipe
-    
+
     def send(self, data):
         #print("PIPE:send: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
         self.__pipe.send(data)
@@ -23,14 +28,14 @@ class LoggingPipeWrapper:
         data = self.__pipe.recv(*args, **kwargs)
         #print("PIPE:recv: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
         return data
-    
+
     def close(self):
         self.__pipe.close()
-    
+
     def poll(self):
         return self.__pipe.poll()
 
-        
+
 class CallbackFrontend(Frontend):
     "A callback driven Frontend interface to qdb"
 
@@ -40,10 +45,10 @@ class CallbackFrontend(Frontend):
         self._em.add_event(Event('breakpoint-reached'))
         self._em.add_event(Event('write'))
         self._em.add_event(Event('mark-current-line'))
-        
+        self._em.add_event(Event('clear-interaction'))
+
         self._breakpoints = set()
-        
-        self.closing = False
+
         self.interacting = False    # flag to signal user interaction
         self.quitting = False       # flag used when Quit is called
         self.attached = False       # flag to signal remote side availability
@@ -53,20 +58,20 @@ class CallbackFrontend(Frontend):
         self.filename = self.lineno = None
         self.unrecoverable_error = False
         self.pipe = None
-        
+
         t = threading.Thread(target=self._run)
         t.start()
 
     """
     Start Frontend API
     """
-    
+
     def exception(self, *args):
         "Notify that a user exception was raised in the backend"
         if not self.unrecoverable_error:
             print("Exception raised in backend")
             self.unrecoverable_error = "%s" % args[0]
-    
+
     def startup(self):
         "Initialization procedures (called by the backend)"
         # notification sent by _runscript before Bdb.run
@@ -79,7 +84,7 @@ class CallbackFrontend(Frontend):
     def write(self, text):
         "ouputs a message (called by the backend)"
         self._em.signal("write", self, text)
-    
+
     def readline(self):
         "returns a user input (called by the backend)"
         # "raw_input" should be atomic and uninterrupted
@@ -88,7 +93,7 @@ class CallbackFrontend(Frontend):
             print("Called readline, not implemented!!")
         finally:
             self.interacting = False
-    
+
     def interaction(self, filename, lineno, line, **context):
         "Start user interaction -show current line- (called by the backend)"
         self.interacting = True
@@ -97,7 +102,7 @@ class CallbackFrontend(Frontend):
                 self.Continue()
                 self.start_continue = None
                 return
-                
+
             #  sync_source_line()
             self.filename = self.orig_line = self.lineno = None
             if filename[:1] + filename[-1:] != "<>" and os.path.exists(filename):
@@ -112,26 +117,20 @@ class CallbackFrontend(Frontend):
                     self.post_event = True
         finally:
             pass
-    
-    
+
+
     """
     End Frontend API
     """
-    
-    
+
+
     def connect_signal(self, signal, handler):
         self._em.connect(signal, handler)
-    
-    def close(self):
-        self.closing = True
-    
+
     def _run(self):
         "Debugger main loop: read and execute remote methods"
         try:
             while True:
-                if self.closing:
-                    print("Closing thread..")
-                    return True
                 time.sleep(0.01)
                 if self.attached and self.pipe:
                     while self.pipe.poll():
@@ -139,18 +138,15 @@ class CallbackFrontend(Frontend):
         except EOFError:
             print("DEBUGGER disconnected...")
             self.detach()
-            self.closing = True
         except IOError as e:
-            print(("DEBUGGER connection exception:", e))
+            print("DEBUGGER connection exception:", e)
             self.detach()
-            self.closing = True
         except Exception as e:
             # print the exception message and close (avoid recursion)
-            print(("DEBUGGER exception", e))
-            self.closing = True
+            print("DEBUGGER exception", e)
             import traceback
             traceback.print_exc()
-            import sys;
+            import sys
             sys.exit()
         finally:
             return True
@@ -163,13 +159,13 @@ class CallbackFrontend(Frontend):
         self.quitting = False
         self.post_event = True
         self.lineno = None
-        
+
     def attach(self, host='localhost', port=6000, authkey=b'secret password'):
         self.address = (host, port)
         self.authkey = authkey
         self.pipe = LoggingPipeWrapper(Client(self.address, authkey=self.authkey))
         print("DEBUGGER connected!")
-    
+
     def detach(self):
         self.attached = False
         if self.pipe:
@@ -177,7 +173,7 @@ class CallbackFrontend(Frontend):
         self.clear_interaction()
 
     def is_remote(self):
-        return (self.attached and 
+        return (self.attached and
                 self.address[0] not in ("localhost"))
 
     def check_interaction(fn):
@@ -191,10 +187,10 @@ class CallbackFrontend(Frontend):
                 #if self.check_running_code(fn.func_name):
                 ret = fn(self, *args, **kwargs)
                 if self.post_event:
-                    self.clear_interaction()                        
+                    self.clear_interaction()
                 return ret
         return check_fn
-    
+
     def is_waiting(self):
         # check if interaction is banned (i.e. readline!)
         if self.interacting is None:
@@ -226,7 +222,7 @@ class CallbackFrontend(Frontend):
             if self.interacting:
                 # send the method request                
                 ret = fn(self, *args, **kwargs)
-                
+
                 if self.quitting:
                     # clean up interaction marker
                     self.clear_interaction()
@@ -242,12 +238,13 @@ class CallbackFrontend(Frontend):
                 return False
         return check_fn
 
-    def clear_interaction(self): 
+    def clear_interaction(self):
         self.interacting = False
+        self._em.signal("clear-interaction", self)
         # interaction is done, clean current line marker
         #wx.PostEvent(self.gui, DebugEvent(EVT_DEBUG_ID, 
         #                                 (None, None, None, None)))
-    
+
 #    def check_running_code(self, func_name):
 #        "Edit and continue functionality -> True=ok or False=restart"
 #        # only check edited code for the following methods:
@@ -291,7 +288,7 @@ class CallbackFrontend(Frontend):
 #        return True
 
     # Methods to handle user interaction by main thread bellow:
-    
+
     @check_interaction
     def Continue(self, filename=None, lineno=None):
         "Execute until the program ends, a breakpoint is hit or interrupted"
@@ -337,7 +334,7 @@ class CallbackFrontend(Frontend):
             # this is a notification, no response will come
             # an interaction will happen on the next possible python instruction
             self.interrupt()
-    
+
     def LoadBreakpoints(self):
         "Set all breakpoints (remotelly, used at initialization)"
         for bk in self._breakpoints:
@@ -346,7 +343,7 @@ class CallbackFrontend(Frontend):
     def SetBreakpointOffline(self, filename, lineno, temporary=0, cond=None):
         print("Adding breakpoint: ", filename, lineno)
         self._breakpoints.add(LineBreakpoint(filename, lineno, temporary))
-    
+
     @force_interaction
     def SetBreakpoint(self, filename, lineno, temporary=0, cond=None):
         "Set the specified breakpoint (remotelly)"
@@ -356,22 +353,22 @@ class CallbackFrontend(Frontend):
         "Remove the specified breakpoint (remotelly)"
         bk = LineBreakpoint(filename, lineno, temporary)
         self._breakpoints.remove(bk)
-    
+
     @force_interaction
     def ClearBreakpoint(self, filename, lineno):
         "Remove the specified breakpoint (remotelly)"
         self.do_clear_breakpoint(filename, lineno)
-            
+
     @force_interaction
     def ClearFileBreakpoints(self, filename):
         "Remove all breakpoints set for a file (remotelly)"
         self.do_clear_file_breakpoints(filename)
 
     # modal functions required by Eval (must not block):
-    
+
 #    def modal_write(self, text):
 #        "Aux dialog to show output (modal for Exec/Eval)"
-#        dlg = wx.MessageDialog(self.gui, text, "Debugger console output", 
+#        dlg = wx.MessageDialog(self.gui, text, "Debugger console output",
 #               wx.OK | wx.ICON_INFORMATION)
 #        dlg.ShowModal()
 #        dlg.Destroy()
@@ -382,9 +379,9 @@ class CallbackFrontend(Frontend):
 ##        dlg = wx.TextEntryDialog(self.gui, msg,
 ##                'Debugger console input', default)
 ##        if dlg.ShowModal() == wx.ID_OK:
-##            return dlg.GetValue() 
+##            return dlg.GetValue()
 ##        dlg.Destroy()
-        
+
 #    @check_interaction
 #    def Eval(self, arg):
 #        "Returns the evaluation of an expression in the debugger context"
@@ -403,7 +400,7 @@ class CallbackFrontend(Frontend):
 #            finally:
 #                self.write = old_write
 #                self.readline = old_readline
-                
+
 
 #    @check_interaction
 #    def ReadFile(self, filename):
@@ -427,7 +424,7 @@ class CallbackFrontend(Frontend):
 #        return d
 
     # methods used by the shell:
-    
+
 #    def Exec(self, statement, write=None, readline=None):
 #        "Exec source code statement in debugger context (returns string)"
 #        if statement == "" or not self.attached:
