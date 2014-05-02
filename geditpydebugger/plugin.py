@@ -9,7 +9,7 @@ MODULE_DIRECTORY = os.path.dirname(__file__)
 
 sys.path.append(os.path.join(MODULE_DIRECTORY, "libs"))
 
-QDB_LAUNCHER_PATH = os.path.join(MODULE_DIRECTORY, "libs", "qdb.py")
+QDB_LAUNCHER_PATH = os.path.join(MODULE_DIRECTORY, "libs", "qdb_launcher.py")
 
 from .debugger_frontend import CallbackFrontend
 from .components import ContextBox, InterpretersDialog
@@ -226,11 +226,12 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         cwd = os.getcwd()
         try:
             os.chdir(cdir)
-            print("Executing: %s" % file_path)
+            #print("Executing: %s" % file_path)
             #qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb', 'qdb_launcher.py')
-            print("QDB path: ", QDB_LAUNCHER_PATH)
-            proc = subprocess.Popen([pythexec + " -u " + QDB_LAUNCHER_PATH + ' ' + file_path],
-             shell=True, close_fds=True)
+            #print("QDB path: ", QDB_LAUNCHER_PATH)
+            cmd = pythexec + " -u " + QDB_LAUNCHER_PATH + ' ' + file_path
+            print("executing: ", cmd)
+            proc = subprocess.Popen([cmd], shell=True, close_fds=True)
             time.sleep(0.5)
             DEBUGGER.get_frontend().attach()
         except Exception as e:

@@ -23,12 +23,15 @@ class InterpretersDialog:
 
     def run(self):
         ret = self._interpreters_dialog.run()
-        self._interpreters_dialog.destroy()
+        self._interpreters_dialog.hide()
         if ret == 0:
             # accept clicked
             act = self._interpreters_combobox.get_active()
-            return self._interpreters_liststore[act][1]
+            selected = self._interpreters_liststore[act][1]
+            self._interpreters_dialog.destroy()
+            return selected
         else:
+            self._interpreters_dialog.destroy()
             return None
 
 class ContextBox(Gtk.HPaned):

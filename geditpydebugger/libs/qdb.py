@@ -24,8 +24,9 @@ import cmd
 import pydoc
 import threading
 
+sys.path.append(os.path.dirname(__file__))
 
-from py3compat import PY3, raw_input, long
+from py3compat import *
 
 
 # Speed Ups: global variables
@@ -184,10 +185,8 @@ class Qdb(bdb.Bdb):
         self._wait_for_mainpyfile = 1
         self.mainpyfile = self.canonic(filename)
         self._user_requested_quit = 0
-        if PY3:
-            statement = 'exec(compile(open("%s").read(), "%s", "exec"))' % (
-                    filename, filename)
-            #statement = 'imp.load_source("__main__", "%s")' % filename
+        if sys.version_info>(3,0):
+            statement = 'imp.load_source("__main__", "%s")' % filename
         else:
             statement = 'execfile(%r)' % filename
         # notify and wait frontend to set initial params and breakpoints
@@ -292,10 +291,7 @@ class Qdb(bdb.Bdb):
         try:
             self.frame.f_lineno = arg
         except ValueError as e:
-            if PY3:
-                return str(e, 'utf-8')
-            else:
-                return unicode(e)
+            return str(e)
 
     def do_list(self, arg):
         last = None
@@ -376,7 +372,6 @@ class Qdb(bdb.Bdb):
             self.displayhook_value = None
             try:
                 sys.displayhook = self.displayhook
-                #exec code in globals, locals
                 exec(code, globals, locals)
                 ret = self.displayhook_value
             finally:
@@ -457,10 +452,7 @@ class Qdb(bdb.Bdb):
             except AttributeError:
                 pass
             if f:
-                if PY3:
-                    argspec = inspect.formatargspec(*inspect.getargspec(f))
-                else:
-                    argspec = apply(inspect.formatargspec, inspect.getargspec(f))
+                argspec = apply(inspect.formatargspec, inspect.getargspec(f))
             doc = ''
             if callable(obj):
                 try:
@@ -535,7 +527,7 @@ class Qdb(bdb.Bdb):
 
     def write(self, text):
         "Replacement for stdout.write()"
-        msg = {'method': 'write', 'args': (text, ), 'id': None}
+        msg = {'method': 'write', 'args': (str(text), ), 'id': None}
         self.pipe.send(msg)
         
     def writelines(self, l):
@@ -696,7 +688,7 @@ class Frontend(object):
         return res
 
     def do_where(self, arg=None):
-        "print(a stack trace, with the most recent frame at the bottom."
+        "Print a stack trace, with the most recent frame at the bottom."
         return self.call('do_where')
 
     def do_quit(self, arg=None):
@@ -729,7 +721,7 @@ class Frontend(object):
 
     def do_clear_file_breakpoints(self, filename):
         "Remove all breakpoints at filename"
-        self.call('do_clear_breakpoints', filename)
+        self.call('do_clear_breakpoints', filename, lineno)
         
     def do_list_breakpoint(self):
         "List all breakpoints"
@@ -759,119 +751,6 @@ class Frontend(object):
         self.send(req)
 
 
-class Cli(Frontend, cmd.Cmd):
-    "Qdb Front-end command line interface"
-    
-    def __init__(self, pipe, completekey='tab', stdin=None, stdout=None, skip=None):
-        cmd.Cmd.__init__(self, completekey, stdin, stdout)
-        Frontend.__init__(self, pipe)
-
-    # redefine Frontend methods:
-    
-    def run(self):
-        while 1:
-            try:
-                Frontend.run(self)
-            except KeyboardInterrupt:
-                print("Interupting...")
-                self.interrupt()
-
-    def interaction(self, filename, lineno, line):
-        print("> %s(%d)\n-> %s" % (filename, lineno, line))
-        self.filename = filename
-        self.cmdloop()
-
-    def exception(self, title, extype, exvalue, trace, request):
-        print("=" * 80)
-        print("Exception", title)
-        print(request)
-        print("-" * 80)
-
-    def write(self, text):
-        print(text)
-    
-    def readline(self):
-        return raw_input()
-        
-    def postcmd(self, stop, line):
-        return not line.startswith("h") # stop
-
-    do_h = cmd.Cmd.do_help
-    
-    do_s = Frontend.do_step
-    do_n = Frontend.do_next
-    do_c = Frontend.do_continue        
-    do_r = Frontend.do_return
-    do_q = Frontend.do_quit
-
-    def do_eval(self, args):
-        "Inspect the value of the expression"
-        print(Frontend.do_eval(self, args))
- 
-    def do_list(self, args):
-        "List source code for the current file"
-        lines = Frontend.do_list(self, eval(args, {}, {}) if args else None)
-        self.print_lines(lines)
-    
-    def do_where(self, args):
-        "print(a stack trace, with the most recent frame at the bottom."
-        lines = Frontend.do_where(self)
-        self.print_lines(lines)
-
-    def do_environment(self, args=None):
-        env = Frontend.do_environment(self)
-        for key in env:
-            print("=" * 78)
-            print(key.capitalize())
-            print("-" * 78)
-            for name, value in env[key].items():
-                print("%-12s = %s" % (name, value))
-
-    def do_list_breakpoint(self, arg=None):
-        "List all breakpoints"
-        breaks = Frontend.do_list_breakpoint(self)
-        print("Num File                          Line Temp Enab Hits Cond")
-        for bp in breaks:
-            print('%-4d%-30s%4d %4s %4s %4d %s' % bp)
-        print()
-
-    def do_set_breakpoint(self, arg):
-        "Set a breakpoint at filename:breakpoint"
-        if arg:
-            if ':' in arg:
-                args = arg.split(":")
-            else:
-                args = (self.filename, arg)
-            Frontend.do_set_breakpoint(self, *args)
-        else:
-            self.do_list_breakpoint()
-
-    def do_jump(self, args):
-        "Jump to the selected line"
-        ret = Frontend.do_jump(self, args)
-        if ret:     # show error message if failed
-            print( "cannot jump:", ret)
-
-    do_b = do_set_breakpoint
-    do_l = do_list
-    do_p = do_eval
-    do_w = do_where
-    do_e = do_environment
-    do_j = do_jump
-
-    def default(self, line):
-        "Default command"
-        if line[:1] == '!':
-            print(self.do_exec(line[1:]))
-        else:
-            print("*** Unknown command: ", line)
-
-    def print_lines(self, lines):
-        for filename, lineno, bp, current, source in lines:
-            print("%s:%4d%s%s\t%s" % (filename, lineno, bp, current, source),)
-        print()
-
-
 def f(pipe):
     "test function to be debugged"
     print("creating debugger")
@@ -881,9 +760,10 @@ def f(pipe):
     my_var = "Mariano!"
     qdb_test.set_trace()
     print("hello world!")
-    for i in range(100000):
+    for i in xrange(100000):
         pass
     print("good by!")
+    
 
 def test():
     "Create a backend/frontend and time it"
@@ -922,13 +802,15 @@ def test():
     print("took", t1 - t0, "seconds")
     sys.exit(0)
 
-def connect(host="localhost", port=6000, authkey=b'secret password'):
+
+def connect(host="localhost", port=6000, authkey='secret password'):
     "Connect to a running debugger backend"
     
     address = (host, port)
-    from multiprocessing.connection import Client
+    #from multiprocessing.connection import Client
+    from json_serializer import JsonClient
 
-    print("qdb debugger fronted: waiting for connection to %s" % str(address))
+    print("qdb debugger fronted: waiting for connection to", address)
     conn = Client(address, authkey=authkey)
     try:
         Cli(conn).run()
@@ -936,6 +818,7 @@ def connect(host="localhost", port=6000, authkey=b'secret password'):
         pass
     finally:
         conn.close()
+
 
 def main(host='localhost', port=6000, authkey=b'secret password'):
     "Debug a script and accept a remote frontend"
@@ -954,9 +837,10 @@ def main(host='localhost', port=6000, authkey=b'secret password'):
     # Replace pdb's dir with script's dir in front of module search path.
     sys.path[0] = os.path.dirname(mainpyfile)
 
-    from multiprocessing.connection import Listener
+    #from multiprocessing.connection import Listener
+    from json_serializer import JsonListener
     address = (host, port)     # family is deduced to be 'AF_INET'
-    listener = Listener(address, authkey=authkey)
+    listener = JsonListener(address, authkey=authkey)
     print("qdb debugger backend: waiting for connection at", address)
     conn = listener.accept()
     print('qdb debugger backend: connected to', listener.last_accepted)
@@ -969,7 +853,7 @@ def main(host='localhost', port=6000, authkey=b'secret password'):
         print("The program finished")
     except SystemExit:
         # In most cases SystemExit does not warrant a post-mortem session.
-        print("The program exited via sys.exit(). Exit status: ",)
+        print("The program exited via sys.exit(). Exit status: ")
         print(sys.exc_info()[1])
         raise
     except Exception:
@@ -985,15 +869,16 @@ def main(host='localhost', port=6000, authkey=b'secret password'):
 
 
 qdb = None
-def set_trace(host='localhost', port=6000, authkey='secret password'):
+def set_trace(host='localhost', port=6000, authkey=b'secret password'):
     "Simplified interface to debug running programs"
     global qdb, listener, conn
     
-    from multiprocessing.connection import Listener
+    #from multiprocessing.connection import Listener
+    from json_serializer import JsonListener
     # only create it if not currently instantiated
     if not qdb:
         address = (host, port)     # family is deduced to be 'AF_INET'
-        listener = Listener(address, authkey=authkey)
+        listener = JsonListener(address, authkey=authkey)
         conn = listener.accept()
 
         # create the backend
@@ -1033,3 +918,4 @@ if __name__ == '__main__':
         # reimport as global __main__ namespace is destroyed
         import qdb
         qdb.main(**kwargs)
+

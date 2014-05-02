@@ -1,4 +1,5 @@
-from multiprocessing.connection import Client
+#from multiprocessing.connection import Client
+from json_serializer import JsonClient
 
 import os
 import time
@@ -9,7 +10,7 @@ import threading
 import sys
 
 print(sys.path)
-from qdb import *
+from qdb import Frontend
 
 from .breakpoint import LineBreakpoint
 from .events import EventManager, Event
@@ -21,12 +22,12 @@ class LoggingPipeWrapper:
         self.__pipe = pipe
 
     def send(self, data):
-        #print("PIPE:send: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
+        print("PIPE:send: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
         self.__pipe.send(data)
 
     def recv(self, *args, **kwargs):
         data = self.__pipe.recv(*args, **kwargs)
-        #print("PIPE:recv: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
+        print("PIPE:recv: %s %s %s %s" % (data.get("id"), data.get("method"), data.get("args"), repr(data.get("result",""))[:40]))
         return data
 
     def close(self):
@@ -163,7 +164,7 @@ class CallbackFrontend(Frontend):
     def attach(self, host='localhost', port=6000, authkey=b'secret password'):
         self.address = (host, port)
         self.authkey = authkey
-        self.pipe = LoggingPipeWrapper(Client(self.address, authkey=self.authkey))
+        self.pipe = LoggingPipeWrapper(JsonClient(self.address, authkey=self.authkey))
         print("DEBUGGER connected!")
 
     def detach(self):
