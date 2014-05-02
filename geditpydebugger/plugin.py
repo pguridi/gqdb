@@ -51,57 +51,70 @@ for py in ['python2', 'python3']:
 print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 
 BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
-CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "step_current.png"))
+CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "anjuta-pcmark-16.png"))
 
-menu_ui_str = """<ui>
-<toolbar name="ToolBar">
-<separator />
-<placeholder name="Debug">
-<toolitem name="Debug" action="gqdb" />
-</placeholder>
-</toolbar>
-<menubar name="MenuBar">
-<menu name="ToolsMenu" action="Tools">
-<placeholder name="ToolsOps_2">
-<menuitem name="Debug" action="gqdb" />
-</placeholder>
-</menu>
-</menubar>
-</ui>"""
+STEP_INTO_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-into-16.png")))
+STEP_OUT_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-out-16.png")))
+STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-over-16.png")))
+
+menu_ui_str = """
+<ui>
+  <menubar name="MenuBar">
+    <menu name="DebugMenu" action="Debug">
+      <placeholder name="Debug">
+        <menuitem action="Debug"/>
+        <menuitem action="StepInto"/>
+        <menuitem action="StepOver"/>
+        <menuitem action="Stop"/>
+      </placeholder>
+    </menu>
+  </menubar>
+
+  <toolbar name="ToolBar">
+    <placeholder name="Debug">
+      <toolitem action="Debug"/>
+      <toolitem action="StepInto"/>
+      <toolitem action="StepOver"/>
+      <toolitem action="StepOut"/>
+      <toolitem action="Stop"/>
+    </placeholder>
+  </toolbar>
+</ui>
+"""
+
+#menu_ui_str = """<ui>
+#<toolbar name="ToolBar">
+#<separator />
+#<placeholder name="Debug">
+#<toolitem name="Debug" action="gqdb" />
+#</placeholder>
+#<placeholder name="Step">
+#<toolitem name="Step" action="step" />
+#</placeholder>
+#<placeholder name="Next">
+#<toolitem name="Next" action="next" />
+#</placeholder>
+#<placeholder name="Continue">
+#<toolitem name="Continue" action="continue" />
+#</placeholder>
+#<placeholder name="Stop">
+#<toolitem name="Stop" action="stop" />
+#</placeholder>
+#</toolbar>
+#<menubar name="MenuBar">
+#<menu name="ToolsMenu" action="Tools">
+#<placeholder name="ToolsOps_2">
+#<menuitem name="Debug" action="gqdb" />
+#</placeholder>
+#</menu>
+#</menubar>
+#</ui>"""
 
 
 def idle_add_decorator(func):
     def callback(*args):
         GLib.idle_add(func, *args)
     return callback
-
-#class GqdbPluginAppActivatable(GObject.Object, Gedit.AppActivatable):
-
-    #app = GObject.property(type=Gedit.App)
-
-    #def __init__(self):
-        #GObject.Object.__init__(self)
-
-    #def do_activate(self):
-        #self.app.add_accelerator("F2", "win.gqdb", None)
-        #self.app.add_accelerator("F3", "win.step", None)
-        #self.app.add_accelerator("F4", "win.step_in", None)
-        #self.app.add_accelerator("F5", "win.continue", None)
-
-        #if GEDIT_VERSION < V("3.12"):
-            #print("Need to implement menus for gedit <3.10")
-        #else:
-            #self.menu_ext = self.extend_menu("tools-section")
-            #item = Gio.MenuItem.new(("Debug"), "win.gqdb")
-            #self.menu_ext.prepend_menu_item(item)
-
-    #def do_deactivate(self):
-        #self.app.remove_accelerator("win.gqdb", None)
-        #self.app.remove_accelerator("win.step_in", None)
-        #self.app.remove_accelerator("win.step", None)
-        #self.app.remove_accelerator("win.continue", None)
-        #self.menu_ext = None
-
 
 class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
     __gtype_name__ = "GqdbPluginActivatable"
@@ -112,29 +125,10 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._handlers = []
         self._views = []
         self._attached = False
+        self._debugger = None
         self._breakpoints = set()
 
     def do_activate(self):
-        #action = Gio.SimpleAction(name="gqdb")
-        #action.connect('activate', lambda a, p: self.debug())
-        #action.connect('activate', lambda a, p: self.clear_markers())
-        #self.window.add_action(action)
-
-        #action = Gio.SimpleAction(name="step")
-        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Next())
-        #action.connect('activate', lambda a, p: self.clear_markers())
-        #self.window.add_action(action)
-
-        #action = Gio.SimpleAction(name="step_in")
-        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Step())
-        #action.connect('activate', lambda a, p: self.clear_markers())
-        #self.window.add_action(action)
-
-        #action = Gio.SimpleAction(name="continue")
-        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Continue())
-        #action.connect('activate', lambda a, p: self.clear_markers())
-        #self.window.add_action(action)
-
         panel = self.window.get_bottom_panel()
         self._context_box = ContextBox()
 
@@ -142,10 +136,25 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             manager = self.window.get_ui_manager()
             # Create a new action group
             self._action_group = Gtk.ActionGroup("DebuggerActions")
-            self._action_group.add_actions([("gqdb", Gtk.STOCK_EXECUTE, _("Debug"),
-                                            "F2", _("Debug"),
-                                            self.debug)])
-
+            actions = [
+              ("Debug", Gtk.STOCK_EXECUTE, "Debug","F2", "Run", self.debug),
+              ('StepInto', None, 'Step Into', 'F3', "Step Into", self.step_into_cb),
+              ('StepOver', None, 'Step Over', 'F4', "Step Over", self.step_over_cb),
+              ('StepOut', None, 'Step Out', 'F5', "Step Out", self.step_out_cb),
+              ('Stop', Gtk.STOCK_STOP, 'Stop', '<Ctrl>F2', "Stop", self.stop_cb)
+            ]
+            self._action_group.add_actions(actions)
+            
+            # Set custom icons
+            step_into_action = self._action_group.get_action('StepInto')
+            step_into_action.set_gicon(STEP_INTO_GIO_ICON)
+            
+            step_out_action = self._action_group.get_action('StepOut')
+            step_out_action.set_gicon(STEP_OUT_GIO_ICON)
+            
+            step_over_action = self._action_group.get_action('StepOver')
+            step_over_action.set_gicon(STEP_OVER_GIO_ICON)
+            
             # Insert the action group
             manager.insert_action_group(self._action_group, -1)
             self._ui_id = manager.add_ui_from_string(menu_ui_str)
@@ -161,6 +170,26 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         hid = self.window.connect("tab-removed", self.on_tab_removed)
         self._handlers.append((self.window, hid))
 
+    def step_into_cb(self, cb):
+        self.clear_markers()
+        if self._debugger and self._debugger.attached:
+            self._debugger.Step()
+        
+    def step_over_cb(self, cb):
+        self.clear_markers()
+        if self._debugger and self._debugger.attached:
+            self._debugger.Next()
+    
+    def step_out_cb(self, cb):
+        self.clear_markers()
+        if self._debugger and self._debugger.attached:
+            self._debugger.StepReturn()
+    
+    def stop_cb(self, cb):
+        self.clear_markers()
+        if self._debugger and self._debugger.attached:
+            self._debugger.Quit()
+    
     def do_deactivate(self):
         for obj, hid in self._handlers:
             obj.disconnect(hid)
@@ -275,7 +304,8 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             self.window.create_tab_from_location(gfile, None, lineno, 0, False, True)
 
         self._context_box.set_context(context)
-
+    
+    @idle_add_decorator
     def clear_markers(self):
         for doc in self.window.get_documents():
             start, end = doc.get_bounds()
