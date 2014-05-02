@@ -281,6 +281,16 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             start, end = doc.get_bounds()
             doc.remove_source_marks(start, end, "2")
     
+    def _attach(self, retry=0):
+        if not self._debugger.attached:
+            if retry == 10:
+                raise Exception("Max retries error.")
+            try:
+                time.sleep(0.5)
+                self._debugger.attach()
+            except ConnectionRefusedError as e:
+                self._attach(retry+1)
+    
     def execute(self, file_path):
         # ask for interpreter
         diag = InterpretersDialog(PYTHON_RUNTIMES)
@@ -288,7 +298,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         if not pythexec:
             return
 
-        self._debugger = CallbackFrontend()
+        self._debugger = CallbackFrontend(breakpoints=self._breakpoints)
         self._debugger.connect_signal('write', self._context_box.write_stdout)
         self._debugger.connect_signal('mark-current-line', self.mark_current_line)
         self._debugger.connect_signal('clear-interaction', self._clear_interaction)
@@ -301,10 +311,10 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         try:
             os.chdir(cdir)
             cmd = pythexec + " -u " + QDB_LAUNCHER_PATH + ' ' + file_path
-            print("executing: ", cmd)
+            print("Executing: ", cmd)
             proc = subprocess.Popen([cmd], shell=True, close_fds=True)
-            time.sleep(0.5)
-            self._debugger.attach()
+            retries = 0
+            self._attach()
         except Exception as e:
             raise
         finally:

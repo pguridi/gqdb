@@ -1,4 +1,3 @@
-#from multiprocessing.connection import Client
 from json_serializer import JsonClient
 
 import os
@@ -40,7 +39,7 @@ class LoggingPipeWrapper:
 class CallbackFrontend(Frontend):
     "A callback driven Frontend interface to qdb"
 
-    def __init__(self, pipe=None):
+    def __init__(self, pipe=None, breakpoints=None):
         Frontend.__init__(self, pipe)
         self._em = EventManager()
         self._em.add_event(Event('breakpoint-reached'))
@@ -48,7 +47,10 @@ class CallbackFrontend(Frontend):
         self._em.add_event(Event('mark-current-line'))
         self._em.add_event(Event('clear-interaction'))
 
-        self._breakpoints = set()
+        if breakpoints:
+            self._breakpoints = breakpoints
+        else:
+            self._breakpoints = set()
 
         self.interacting = False    # flag to signal user interaction
         self.quitting = False       # flag used when Quit is called
@@ -155,8 +157,8 @@ class CallbackFrontend(Frontend):
     def init(self, cont=False):
         # restore sane defaults:
         self.start_continue = cont
+        self.attached = False
         self.unrecoverable_error = None
-        self.attached = True
         self.quitting = False
         self.post_event = True
         self.lineno = None
@@ -165,6 +167,7 @@ class CallbackFrontend(Frontend):
         self.address = (host, port)
         self.authkey = authkey
         self.pipe = LoggingPipeWrapper(JsonClient(self.address, authkey=self.authkey))
+        self.attached = True
         print("DEBUGGER connected!")
 
     def detach(self):
