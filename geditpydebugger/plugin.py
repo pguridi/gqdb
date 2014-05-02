@@ -13,6 +13,7 @@ QDB_LAUNCHER_PATH = os.path.join(MODULE_DIRECTORY, "libs", "qdb_launcher.py")
 
 from .debugger_frontend import CallbackFrontend
 from .components import ContextBox, InterpretersDialog
+from .breakpoint import LineBreakpoint
 
 from distutils.version import StrictVersion as V
 from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
@@ -74,67 +75,189 @@ def idle_add_decorator(func):
         GLib.idle_add(func, *args)
     return callback
 
-class GDebugger:
+#class GqdbPluginAppActivatable(GObject.Object, Gedit.AppActivatable):
 
-    def __init__(self):
-        self.DEBUGGER = CallbackFrontend()
+    #app = GObject.property(type=Gedit.App)
 
-    def set_app(self, app):
-        self.APP = app
+    #def __init__(self):
+        #GObject.Object.__init__(self)
 
-    def set_window(self, window):
-        self.WINDOW = window
+    #def do_activate(self):
+        #self.app.add_accelerator("F2", "win.gqdb", None)
+        #self.app.add_accelerator("F3", "win.step", None)
+        #self.app.add_accelerator("F4", "win.step_in", None)
+        #self.app.add_accelerator("F5", "win.continue", None)
 
-    def get_frontend(self):
-        return self.DEBUGGER
+        #if GEDIT_VERSION < V("3.12"):
+            #print("Need to implement menus for gedit <3.10")
+        #else:
+            #self.menu_ext = self.extend_menu("tools-section")
+            #item = Gio.MenuItem.new(("Debug"), "win.gqdb")
+            #self.menu_ext.prepend_menu_item(item)
 
-DEBUGGER = GDebugger()
-
-class GqdbPluginAppActivatable(GObject.Object, Gedit.AppActivatable):
-
-    app = GObject.property(type=Gedit.App)
-
-    def __init__(self):
-        GObject.Object.__init__(self)
-
-    def do_activate(self):
-        self.app.add_accelerator("F2", "win.gqdb", None)
-        self.app.add_accelerator("F3", "win.step", None)
-        self.app.add_accelerator("F4", "win.step_in", None)
-        self.app.add_accelerator("F5", "win.continue", None)
-
-        if GEDIT_VERSION < V("3.12"):
-            print("Need to implement menus for gedit <3.10")
-        else:
-            self.menu_ext = self.extend_menu("tools-section")
-            item = Gio.MenuItem.new(("Debug"), "win.gqdb")
-            self.menu_ext.prepend_menu_item(item)
-
-    def do_deactivate(self):
-        self.app.remove_accelerator("win.gqdb", None)
-        self.app.remove_accelerator("win.step_in", None)
-        self.app.remove_accelerator("win.step", None)
-        self.app.remove_accelerator("win.continue", None)
-        self.menu_ext = None
+    #def do_deactivate(self):
+        #self.app.remove_accelerator("win.gqdb", None)
+        #self.app.remove_accelerator("win.step_in", None)
+        #self.app.remove_accelerator("win.step", None)
+        #self.app.remove_accelerator("win.continue", None)
+        #self.menu_ext = None
 
 
-class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
-    #__gtype_name__ = "GQdb"
+class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
+    __gtype_name__ = "GqdbPluginActivatable"
     window = GObject.property(type=Gedit.Window)
 
     def __init__(self):
         GObject.Object.__init__(self)
-        self._ui_id = None
+        self._handlers = []
+        self._views = []
+        self._attached = False
+        self._breakpoints = set()
+
+    def do_activate(self):
+        #action = Gio.SimpleAction(name="gqdb")
+        #action.connect('activate', lambda a, p: self.debug())
+        #action.connect('activate', lambda a, p: self.clear_markers())
+        #self.window.add_action(action)
+
+        #action = Gio.SimpleAction(name="step")
+        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Next())
+        #action.connect('activate', lambda a, p: self.clear_markers())
+        #self.window.add_action(action)
+
+        #action = Gio.SimpleAction(name="step_in")
+        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Step())
+        #action.connect('activate', lambda a, p: self.clear_markers())
+        #self.window.add_action(action)
+
+        #action = Gio.SimpleAction(name="continue")
+        #action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Continue())
+        #action.connect('activate', lambda a, p: self.clear_markers())
+        #self.window.add_action(action)
+
+        panel = self.window.get_bottom_panel()
+        self._context_box = ContextBox()
+
+        if GEDIT_VERSION < V("3.12"):
+            manager = self.window.get_ui_manager()
+            # Create a new action group
+            self._action_group = Gtk.ActionGroup("DebuggerActions")
+            self._action_group.add_actions([("gqdb", Gtk.STOCK_EXECUTE, _("Debug"),
+                                            "F2", _("Debug"),
+                                            self.debug)])
+
+            # Insert the action group
+            manager.insert_action_group(self._action_group, -1)
+            self._ui_id = manager.add_ui_from_string(menu_ui_str)
+            panel.add_item(self._context_box, "debuggerpanel", "Python debugger", None)
+        else:
+            panel.add_titled(self._context_box, "debuggerpanel", "Python debugger")
+        panel.show_all()
+        
+        hid = self.window.connect("active-tab-state-changed", self.on_tab_state_changed)
+        self._handlers.append((self.window, hid))
+        hid = self.window.connect("active-tab-changed", self.on_active_tab_changed)
+        self._handlers.append((self.window, hid))
+        hid = self.window.connect("tab-removed", self.on_tab_removed)
+        self._handlers.append((self.window, hid))
+
+    def do_deactivate(self):
+        for obj, hid in self._handlers:
+            obj.disconnect(hid)
+        self._handlers = None
+        self.window.remove_action("gqdb")
+        panel = self.window.get_bottom_panel()
+        panel.remove(self._context_box)
+        if GEDIT_VERSION < V("3.10"):
+            manager = self.window.get_ui_manager()
+            manager.remove_ui(self._ui_id)
+    
+    def do_update_state(self):
+        pass
+        
+    def on_tab_state_changed(self, window, data=None):
+        view = self.window.get_active_view()
+        if not view:
+            return
+    
+    def on_tab_removed(self, window, tab, data=None):
+        if tab in self._views:
+            del self.views[tab]
+    
+    def on_active_tab_changed(self, window, tab, data=None):
+        view = self.window.get_active_view()
+        if not view:
+            return
+            
+        if view not in self._views:
+            view.set_show_line_marks(True)
+            source_attrs = GtkSource.MarkAttributes()
+            source_attrs.set_pixbuf(BREAKPOINT_PIXBUF)
+            view.set_mark_attributes("1", source_attrs, 1)
+
+            source_attrs = GtkSource.MarkAttributes()
+            source_attrs.set_pixbuf(CURRENT_STEP_PIXBUF)
+            view.set_mark_attributes("2", source_attrs, 2)
+
+            view.connect('button-press-event', self.button_press_cb)
+    
+    def button_press_cb(self, view, ev):
+        mark_category = "1"
+        buf = view.get_buffer()
+        # check that the click was on the left gutter
+        if ev.window == view.get_window(Gtk.TextWindowType.LEFT):
+            if ev.button != 1:
+                return
+
+            if ev.type != Gdk.EventType._2BUTTON_PRESS:
+                return
+
+            current_doc = self.window.get_active_document().get_location()
+            if not current_doc:
+                return
+            print(current_doc.get_path())
+            current_doc_path = current_doc.get_path()
+
+            x_buf, y_buf = view.window_to_buffer_coords(Gtk.TextWindowType.LEFT,
+                                                    int(ev.x), int(ev.y))
+            # get line bounds
+            line_start = view.get_line_at_y(y_buf)[0]
+            lineno = line_start.get_line() + 1
+
+            # get the markers already in the line
+            mark_list = buf.get_source_marks_at_line(line_start.get_line(), mark_category)
+            # search for the marker corresponding to the button pressed
+            for m in mark_list:
+                if m.get_category() == mark_category:
+                    # a marker was found, so delete it
+                    buf.delete_mark(m)
+                    if self._attached:
+                        self.debugger.ClearBreakpoint(current_doc_path, lineno)
+                    else:
+                        self._breakpoints.remove(LineBreakpoint(current_doc_path, lineno, 0))
+                    break
+            else:
+                # no marker found, create one
+                buf.create_source_mark(None, mark_category, line_start)
+                #self._breakpoints_liststore.append([True, 'Line: ' + str(line_start.get_line() + 1),
+                #                                    self._breakpoint_pixbuf])
+                if self._attached:
+                    self.debugger.SetBreakpoint(current_doc_path, lineno)
+                else:
+                    self._breakpoints.add(LineBreakpoint(current_doc_path, lineno, 0))
+
+        return False
 
     @idle_add_decorator
     def _clear_interaction(self, sender):
         self.clear_markers()
         self._context_box.clear()
+        #self._debugger.close()
 
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
         lineno -= 1
-        current_doc = DEBUGGER.WINDOW.get_active_document().get_location()
+        current_doc = self.window.get_active_document().get_location()
         if not current_doc:
             return
 
@@ -157,61 +280,7 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         for doc in self.window.get_documents():
             start, end = doc.get_bounds()
             doc.remove_source_marks(start, end, "2")
-
-    def do_activate(self):
-        action = Gio.SimpleAction(name="gqdb")
-        action.connect('activate', lambda a, p: self.debug())
-        action.connect('activate', lambda a, p: self.clear_markers())
-        self.window.add_action(action)
-
-        action = Gio.SimpleAction(name="step")
-        action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Next())
-        action.connect('activate', lambda a, p: self.clear_markers())
-        self.window.add_action(action)
-
-        action = Gio.SimpleAction(name="step_in")
-        action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Step())
-        action.connect('activate', lambda a, p: self.clear_markers())
-        self.window.add_action(action)
-
-        action = Gio.SimpleAction(name="continue")
-        action.connect('activate', lambda a, p: DEBUGGER.get_frontend().Continue())
-        action.connect('activate', lambda a, p: self.clear_markers())
-        self.window.add_action(action)
-
-        panel = self.window.get_bottom_panel()
-        self._context_box = ContextBox()
-
-        if GEDIT_VERSION < V("3.12"):
-            manager = self.window.get_ui_manager()
-            # Create a new action group
-            self._action_group = Gtk.ActionGroup("DebuggerActions")
-            self._action_group.add_actions([("gqdb", Gtk.STOCK_EXECUTE, _("Debug"),
-                                            None, _("Debug"),
-                                            self.debug)])
-
-            # Insert the action group
-            manager.insert_action_group(self._action_group, -1)
-            self._ui_id = manager.add_ui_from_string(menu_ui_str)
-            panel.add_item(self._context_box, "debuggerpanel", "Python debugger", None)
-        else:
-            panel.add_titled(self._context_box, "debuggerpanel", "Python debugger")
-        panel.show_all()
-        
-        DEBUGGER.set_window(self.window)
-
-        DEBUGGER.get_frontend().connect_signal('write', self._context_box.write_stdout)
-        DEBUGGER.get_frontend().connect_signal('mark-current-line', self.mark_current_line)
-        DEBUGGER.get_frontend().connect_signal('clear-interaction', self._clear_interaction)
-
-    def do_deactivate(self):
-        self.window.remove_action("gqdb")
-        panel = self.window.get_bottom_panel()
-        panel.remove(self._context_box)
-        if GEDIT_VERSION < V("3.10"):
-            manager = self.window.get_ui_manager()
-            manager.remove_ui(self._ui_id)
-
+    
     def execute(self, file_path):
         # ask for interpreter
         diag = InterpretersDialog(PYTHON_RUNTIMES)
@@ -219,28 +288,27 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         if not pythexec:
             return
 
-        DEBUGGER.get_frontend().init(1)
+        self._debugger = CallbackFrontend()
+        self._debugger.connect_signal('write', self._context_box.write_stdout)
+        self._debugger.connect_signal('mark-current-line', self.mark_current_line)
+        self._debugger.connect_signal('clear-interaction', self._clear_interaction)
+        self._debugger.init(cont=True)
+        
         cdir, filen = os.path.split(file_path)
         if not cdir:
             cdir = "."
         cwd = os.getcwd()
         try:
             os.chdir(cdir)
-            #print("Executing: %s" % file_path)
-            #qdb_path = os.path.join(MODULE_DIRECTORY, 'qdb', 'qdb_launcher.py')
-            #print("QDB path: ", QDB_LAUNCHER_PATH)
             cmd = pythexec + " -u " + QDB_LAUNCHER_PATH + ' ' + file_path
             print("executing: ", cmd)
             proc = subprocess.Popen([cmd], shell=True, close_fds=True)
             time.sleep(0.5)
-            DEBUGGER.get_frontend().attach()
+            self._debugger.attach()
         except Exception as e:
             raise
         finally:
             os.chdir(cwd)
-
-    def do_update_state(self):
-        pass
 
     def debug(self, action=None):
         active_document = self.window.get_active_document()
@@ -248,66 +316,3 @@ class GqdbPluginWindowActivatable(GObject.Object, Gedit.WindowActivatable):
         if not doc_location:
             return
         self.execute(doc_location.get_path())
-
-
-class GqdbPluginViewActivatable(GObject.Object, Gedit.ViewActivatable):
-    #__gtype_name__ = "GqdbPluginViewActivatable"
-    view = GObject.property(type=Gedit.View)
-
-    def do_activate(self):
-        self.view.set_show_line_marks(True)
-        source_attrs = GtkSource.MarkAttributes()
-        source_attrs.set_pixbuf(BREAKPOINT_PIXBUF)
-        self.view.set_mark_attributes("1", source_attrs, 1)
-
-        source_attrs = GtkSource.MarkAttributes()
-        source_attrs.set_pixbuf(CURRENT_STEP_PIXBUF)
-        self.view.set_mark_attributes("2", source_attrs, 2)
-
-        self.view.connect('button-press-event', self.button_press_cb)
-
-    def button_press_cb(self, view, ev):
-        mark_category = "1"
-        buf = view.get_buffer()
-        # check that the click was on the left gutter
-        if ev.window == view.get_window(Gtk.TextWindowType.LEFT):
-            if ev.button != 1:
-                return
-
-            if ev.type != Gdk.EventType._2BUTTON_PRESS:
-                return
-
-            current_doc = DEBUGGER.WINDOW.get_active_document().get_location()
-            if not current_doc:
-                return
-            print(current_doc.get_path())
-            current_doc_path = current_doc.get_path()
-
-            x_buf, y_buf = view.window_to_buffer_coords(Gtk.TextWindowType.LEFT,
-                                                    int(ev.x), int(ev.y))
-            # get line bounds
-            line_start = view.get_line_at_y(y_buf)[0]
-
-            # get the markers already in the line
-            mark_list = buf.get_source_marks_at_line(line_start.get_line(), mark_category)
-            # search for the marker corresponding to the button pressed
-            for m in mark_list:
-                if m.get_category() == mark_category:
-                    # a marker was found, so delete it
-                    buf.delete_mark(m)
-                    if DEBUGGER.get_frontend().attached:
-                        DEBUGGER.get_frontend().ClearBreakpoint(current_doc_path, line_start.get_line() + 1)
-                    else:
-                        DEBUGGER.get_frontend().ClearBreakpointOffline(current_doc_path, line_start.get_line() + 1)
-                    break
-            else:
-                # no marker found, create one
-                buf.create_source_mark(None, mark_category, line_start)
-                #self._breakpoints_liststore.append([True, 'Line: ' + str(line_start.get_line() + 1),
-                #                                    self._breakpoint_pixbuf])
-                if DEBUGGER.get_frontend().attached:
-                    DEBUGGER.get_frontend().SetBreakpoint(current_doc_path, line_start.get_line() + 1)
-                else:
-                    DEBUGGER.get_frontend().SetBreakpointOffline(current_doc_path, line_start.get_line() + 1)
-
-        return False
