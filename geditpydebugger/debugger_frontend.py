@@ -134,11 +134,11 @@ class CallbackFrontend(Frontend):
         "Debugger main loop: read and execute remote methods"
         try:
             while True:
-                time.sleep(0.01)
                 if self.attached and self.pipe:
+                    time.sleep(0.05)
                     while self.pipe.poll():
                         self.run()
-        except EOFError:
+        except EOFError as e:
             print("DEBUGGER disconnected...")
             self.detach()
         except IOError as e:
@@ -190,8 +190,8 @@ class CallbackFrontend(Frontend):
                 # do not execute if edited (code editions must be checked)
                 #if self.check_running_code(fn.func_name):
                 ret = fn(self, *args, **kwargs)
-                if self.post_event:
-                    self.clear_interaction()
+                #if self.post_event:
+                #    self.clear_interaction()
                 return ret
         return check_fn
 
@@ -296,6 +296,7 @@ class CallbackFrontend(Frontend):
     @check_interaction
     def Continue(self, filename=None, lineno=None):
         "Execute until the program ends, a breakpoint is hit or interrupted"
+        print("Continue")
         if filename and lineno:
             # set a temp breakpoint (continue to...)
             self.set_burst(2)

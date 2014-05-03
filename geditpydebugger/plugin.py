@@ -53,6 +53,7 @@ print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
 CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "anjuta-pcmark-16.png"))
 
+DEBUGGER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "bug-icon.png")))
 STEP_INTO_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-into-16.png")))
 STEP_OUT_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-out-16.png")))
 STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-over-16.png")))
@@ -60,56 +61,31 @@ STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_
 menu_ui_str = """
 <ui>
   <menubar name="MenuBar">
-    <menu name="DebugMenu" action="Debug">
-      <placeholder name="Debug">
+    <menu name="Debugger" action="Debugger">
+      <placeholder name="Debugger">
         <menuitem action="Debug"/>
         <menuitem action="StepInto"/>
         <menuitem action="StepOver"/>
+        <menuitem action="StepOut"/>
+        <menuitem action="Continue"/>
         <menuitem action="Stop"/>
       </placeholder>
     </menu>
   </menubar>
 
   <toolbar name="ToolBar">
-    <placeholder name="Debug">
+    <separator />
+    <placeholder name="DebugBar">
       <toolitem action="Debug"/>
       <toolitem action="StepInto"/>
       <toolitem action="StepOver"/>
       <toolitem action="StepOut"/>
+      <toolitem action="Continue"/>
       <toolitem action="Stop"/>
     </placeholder>
   </toolbar>
 </ui>
 """
-
-#menu_ui_str = """<ui>
-#<toolbar name="ToolBar">
-#<separator />
-#<placeholder name="Debug">
-#<toolitem name="Debug" action="gqdb" />
-#</placeholder>
-#<placeholder name="Step">
-#<toolitem name="Step" action="step" />
-#</placeholder>
-#<placeholder name="Next">
-#<toolitem name="Next" action="next" />
-#</placeholder>
-#<placeholder name="Continue">
-#<toolitem name="Continue" action="continue" />
-#</placeholder>
-#<placeholder name="Stop">
-#<toolitem name="Stop" action="stop" />
-#</placeholder>
-#</toolbar>
-#<menubar name="MenuBar">
-#<menu name="ToolsMenu" action="Tools">
-#<placeholder name="ToolsOps_2">
-#<menuitem name="Debug" action="gqdb" />
-#</placeholder>
-#</menu>
-#</menubar>
-#</ui>"""
-
 
 def idle_add_decorator(func):
     def callback(*args):
@@ -124,7 +100,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         GObject.Object.__init__(self)
         self._handlers = []
         self._views = []
-        self._attached = False
+        self._debugging = False
         self._debugger = None
         self._breakpoints = set()
 
@@ -137,10 +113,12 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             # Create a new action group
             self._action_group = Gtk.ActionGroup("DebuggerActions")
             actions = [
-              ("Debug", Gtk.STOCK_EXECUTE, "Debug","F2", "Run", self.debug),
+              ("Debugger", None, "Debugger", None, "Debugger", None),
+              ("Debug", None, "Debug","F2", "Debug", self.debug),
               ('StepInto', None, 'Step Into', 'F3', "Step Into", self.step_into_cb),
               ('StepOver', None, 'Step Over', 'F4', "Step Over", self.step_over_cb),
               ('StepOut', None, 'Step Out', 'F5', "Step Out", self.step_out_cb),
+              ('Continue', Gtk.STOCK_MEDIA_PLAY, 'Continue', 'F6', "Continue", self.step_continue),
               ('Stop', Gtk.STOCK_STOP, 'Stop', '<Ctrl>F2', "Stop", self.stop_cb)
             ]
             self._action_group.add_actions(actions)
@@ -154,6 +132,10 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             
             step_over_action = self._action_group.get_action('StepOver')
             step_over_action.set_gicon(STEP_OVER_GIO_ICON)
+            
+            debug_action = self._action_group.get_action('Debug')
+            debug_action.set_gicon(DEBUGGER_GIO_ICON)
+            
             
             # Insert the action group
             manager.insert_action_group(self._action_group, -1)
@@ -169,26 +151,50 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._handlers.append((self.window, hid))
         hid = self.window.connect("tab-removed", self.on_tab_removed)
         self._handlers.append((self.window, hid))
-
+        self.setDebugging(False)
+    
     def step_into_cb(self, cb):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Step()
-        
+
     def step_over_cb(self, cb):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Next()
-    
+            
     def step_out_cb(self, cb):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.StepReturn()
+            
+    def step_continue(self, cb):
+        print("step_continue")
+        self.clear_markers()
+        if self._debugger and self._debugger.attached:
+            self._debugger.Continue()
     
     def stop_cb(self, cb):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Quit()
+    
+    def setDebugging(self, val):
+        print("Setting debugging to:", val)
+        self._debugging = val
+        debug_action = self._action_group.get_action('Debug')
+        step_into_action = self._action_group.get_action('StepInto')
+        step_out_action = self._action_group.get_action('StepOut')
+        step_over_action = self._action_group.get_action('StepOver')
+        step_continue_action = self._action_group.get_action('Continue')
+        stop_action = self._action_group.get_action('Stop')
+        
+        debug_action.set_sensitive(not val)
+        step_into_action.set_sensitive(val)
+        step_out_action.set_sensitive(val)
+        step_over_action.set_sensitive(val)
+        step_continue_action.set_sensitive(val)
+        stop_action.set_sensitive(val)
     
     def do_deactivate(self):
         for obj, hid in self._handlers:
@@ -260,27 +266,28 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                 if m.get_category() == mark_category:
                     # a marker was found, so delete it
                     buf.delete_mark(m)
-                    if self._attached:
-                        self.debugger.ClearBreakpoint(current_doc_path, lineno)
-                    else:
-                        self._breakpoints.remove(LineBreakpoint(current_doc_path, lineno, 0))
+                    self._breakpoints.remove(LineBreakpoint(current_doc_path, lineno, 0))
+                    if self._debugger and self._debugger.attached:
+                        self._debugger.ClearBreakpoint(current_doc_path, lineno)
                     break
             else:
                 # no marker found, create one
                 buf.create_source_mark(None, mark_category, line_start)
                 #self._breakpoints_liststore.append([True, 'Line: ' + str(line_start.get_line() + 1),
                 #                                    self._breakpoint_pixbuf])
-                if self._attached:
-                    self.debugger.SetBreakpoint(current_doc_path, lineno)
-                else:
-                    self._breakpoints.add(LineBreakpoint(current_doc_path, lineno, 0))
-
+                self._breakpoints.add(LineBreakpoint(current_doc_path, lineno, 0))                
+                if self._debugger and self._debugger.attached:
+                    self._debugger.SetBreakpoint(current_doc_path, lineno)
         return False
 
     @idle_add_decorator
     def _clear_interaction(self, sender):
+        print("Clear interaction")
         self.clear_markers()
         self._context_box.clear()
+        self.setDebugging(False)
+        while Gtk.events_pending():
+            Gtk.main_iteration()
         #self._debugger.close()
 
     @idle_add_decorator
@@ -304,12 +311,15 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             self.window.create_tab_from_location(gfile, None, lineno, 0, False, True)
 
         self._context_box.set_context(context)
+        while Gtk.events_pending():
+            Gtk.main_iteration()
     
-    @idle_add_decorator
     def clear_markers(self):
         for doc in self.window.get_documents():
             start, end = doc.get_bounds()
             doc.remove_source_marks(start, end, "2")
+        while Gtk.events_pending():
+            Gtk.main_iteration()
     
     def _attach(self, retry=0):
         if not self._debugger.attached:
@@ -333,6 +343,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._debugger.connect_signal('mark-current-line', self.mark_current_line)
         self._debugger.connect_signal('clear-interaction', self._clear_interaction)
         self._debugger.init(cont=True)
+        self.setDebugging(True)
         
         cdir, filen = os.path.split(file_path)
         if not cdir:
@@ -346,6 +357,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             retries = 0
             self._attach()
         except Exception as e:
+            self.setDebugging(False)
             raise
         finally:
             os.chdir(cwd)
