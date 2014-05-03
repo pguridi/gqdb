@@ -1,4 +1,5 @@
 from json_serializer import JsonClient
+from multiprocessing import Queue
 
 import os
 import time
@@ -12,7 +13,6 @@ print(sys.path)
 from qdb import Frontend
 
 from .breakpoint import LineBreakpoint
-from .events import EventManager, Event
 
 
 class LoggingPipeWrapper:
@@ -41,12 +41,7 @@ class CallbackFrontend(Frontend):
 
     def __init__(self, pipe=None, breakpoints=None):
         Frontend.__init__(self, pipe)
-        self._em = EventManager()
-        self._em.add_event(Event('breakpoint-reached'))
-        self._em.add_event(Event('write'))
-        self._em.add_event(Event('mark-current-line'))
-        self._em.add_event(Event('clear-interaction'))
-
+        self.messages_queue = Queue()
         if breakpoints:
             self._breakpoints = breakpoints
         else:
@@ -86,7 +81,7 @@ class CallbackFrontend(Frontend):
 
     def write(self, text):
         "ouputs a message (called by the backend)"
-        self._em.signal("write", self, text)
+        self.messages_queue.put(("write", (text,)))
 
     def readline(self):
         "returns a user input (called by the backend)"
@@ -114,7 +109,7 @@ class CallbackFrontend(Frontend):
                 self.lineno = lineno
                 if self.post_event:
                     # send the event to mark the current line
-                    self._em.signal("mark-current-line", self, filename, lineno, context)
+                    self.messages_queue.put(("mark-current-line", (filename, lineno, context)))
                 else:
                     # ignore this (async command) and reenable notifications
                     self.post_event = True
@@ -125,11 +120,6 @@ class CallbackFrontend(Frontend):
     """
     End Frontend API
     """
-
-
-    def connect_signal(self, signal, handler):
-        self._em.connect(signal, handler)
-
     def _run(self):
         "Debugger main loop: read and execute remote methods"
         try:
@@ -244,7 +234,7 @@ class CallbackFrontend(Frontend):
 
     def clear_interaction(self):
         self.interacting = False
-        self._em.signal("clear-interaction", self)
+        self.messages_queue.put(("clear-interaction", ()))
         # interaction is done, clean current line marker
         #wx.PostEvent(self.gui, DebugEvent(EVT_DEBUG_ID, 
         #                                 (None, None, None, None)))

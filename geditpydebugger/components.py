@@ -67,8 +67,7 @@ class ContextBox(Gtk.HPaned):
             it = self._variables_treestore.append(None, [VARIABLE_PIXBUF,
                                                       k, vtype + ': ' + val])
     
-    @idle_add_decorator
-    def write_stdout(self, sender, msg):
+    def write_stdout(self, msg):
         self._console_textbuffer = self._console_textview.get_buffer()
         start, end = self._console_textbuffer.get_bounds()
         self._console_textbuffer.insert(end, msg)

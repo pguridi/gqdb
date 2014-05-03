@@ -87,11 +87,6 @@ menu_ui_str = """
 </ui>
 """
 
-def idle_add_decorator(func):
-    def callback(*args):
-        GLib.idle_add(func, *args)
-    return callback
-
 class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
     __gtype_name__ = "GqdbPluginActivatable"
     window = GObject.property(type=Gedit.Window)
@@ -103,10 +98,14 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._debugging = False
         self._debugger = None
         self._breakpoints = set()
+        self._gui_handlers = {}
 
     def do_activate(self):
         panel = self.window.get_bottom_panel()
         self._context_box = ContextBox()
+        self._gui_handlers = {'write': self._context_box.write_stdout,
+                    'mark-current-line' : self.mark_current_line,
+                    'clear-interaction' : self._clear_interaction}
 
         if GEDIT_VERSION < V("3.12"):
             manager = self.window.get_ui_manager()
@@ -135,7 +134,6 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             
             debug_action = self._action_group.get_action('Debug')
             debug_action.set_gicon(DEBUGGER_GIO_ICON)
-            
             
             # Insert the action group
             manager.insert_action_group(self._action_group, -1)
@@ -197,6 +195,8 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         stop_action.set_sensitive(val)
     
     def do_deactivate(self):
+        self._gui_handlers = {}
+        
         for obj, hid in self._handlers:
             obj.disconnect(hid)
         self._handlers = None
@@ -279,18 +279,13 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                 if self._debugger and self._debugger.attached:
                     self._debugger.SetBreakpoint(current_doc_path, lineno)
 
-    @idle_add_decorator
-    def _clear_interaction(self, sender):
+    def _clear_interaction(self, sender=None):
         print("Clear interaction")
         self.clear_markers()
         self._context_box.clear()
         self.setDebugging(False)
-##        while Gtk.events_pending():
-##            Gtk.main_iteration_do(False)
-        #self._debugger.close()
 
-    @idle_add_decorator
-    def mark_current_line(self, sender, filename, lineno, context):
+    def mark_current_line(self, filename, lineno, context):
         lineno -= 1
         
         gfile = Gio.File.new_for_path(filename)
@@ -302,9 +297,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         
         document = document_tab.get_document()
         self.window.set_active_tab(document_tab)
-        while Gtk.events_pending():
-            Gtk.main_iteration_do(False)
-            
+        
         print("Setting mark at line: ", lineno)
         document.goto_line(lineno)
         document.create_source_mark(None, "2", document.get_iter_at_line(lineno))
@@ -314,9 +307,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         for doc in self.window.get_documents():
             start, end = doc.get_bounds()
             doc.remove_source_marks(start, end, "2")
-        while Gtk.events_pending():
-            Gtk.main_iteration_do(False)
-    
+                
     def _attach(self, retry=0):
         if not self._debugger.attached:
             if retry == 10:
@@ -326,6 +317,15 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                 self._debugger.attach()
             except ConnectionRefusedError as e:
                 self._attach(retry+1)
+
+    def _check_messages(self):
+        while not self._debugger.messages_queue.empty():
+            method_name, data = self._debugger.messages_queue.get_nowait()
+            # call the handler
+            self._gui_handlers[method_name](*data)
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+        return self._debugging
     
     def execute(self, file_path):
         # ask for interpreter
@@ -333,13 +333,11 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         pythexec = diag.run()
         if not pythexec:
             return
-
-        self._debugger = CallbackFrontend(breakpoints=self._breakpoints)
-        self._debugger.connect_signal('write', self._context_box.write_stdout)
-        self._debugger.connect_signal('mark-current-line', self.mark_current_line)
-        self._debugger.connect_signal('clear-interaction', self._clear_interaction)
-        self._debugger.init(cont=True)
+        # poll messages from queue
         self.setDebugging(True)
+        GLib.timeout_add(100, self._check_messages)
+        self._debugger = CallbackFrontend(breakpoints=self._breakpoints)
+        self._debugger.init(cont=True)
         
         cdir, filen = os.path.split(file_path)
         if not cdir:
