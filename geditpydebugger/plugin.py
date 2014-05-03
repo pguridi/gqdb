@@ -278,7 +278,6 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                 self._breakpoints.add(LineBreakpoint(current_doc_path, lineno, 0))                
                 if self._debugger and self._debugger.attached:
                     self._debugger.SetBreakpoint(current_doc_path, lineno)
-        return False
 
     @idle_add_decorator
     def _clear_interaction(self, sender):
@@ -286,50 +285,37 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self.clear_markers()
         self._context_box.clear()
         self.setDebugging(False)
-        while Gtk.events_pending():
-            Gtk.main_iteration()
+##        while Gtk.events_pending():
+##            Gtk.main_iteration_do(False)
         #self._debugger.close()
 
     @idle_add_decorator
     def mark_current_line(self, sender, filename, lineno, context):
         lineno -= 1
-        current_doc = self.window.get_active_document().get_location()
-        
-        found = False
-        # Get the document
-        for doc in self.window.get_documents():
-            if doc.get_location() and doc.get_location().get_path() == filename:
-                found = True
-                doc.goto_line(lineno)
-                doc.create_source_mark(None, "2", doc.get_iter_at_line(lineno))
         
         gfile = Gio.File.new_for_path(filename)
-        if not found:
-            print("Doc not opened, lets open it..")
-            print(filename)
-            
+        document_tab = self.window.get_tab_from_location(gfile)
+        if not document_tab:
+            # no tab opened with this document, lets open it
             self.window.create_tab_from_location(gfile, None, lineno + 1, 0, False, True)
-            location_tab = self.window.get_tab_from_location(gfile)
-            current_doc = location_tab.get_document()
-            #current_doc.goto_line(lineno)
-            while Gtk.events_pending():
-                Gtk.main_iteration()
-            print("Setting mark at line: ", lineno)
-            current_doc.create_source_mark(None, "2", current_doc.get_iter_at_line(lineno))
+            document_tab = self.window.get_tab_from_location(gfile)
         
-        tab = self.window.get_tab_from_location(gfile)
-        self.window.set_active_tab(tab)
-
-        self._context_box.set_context(context)
+        document = document_tab.get_document()
+        self.window.set_active_tab(document_tab)
         while Gtk.events_pending():
-            Gtk.main_iteration()
+            Gtk.main_iteration_do(False)
+            
+        print("Setting mark at line: ", lineno)
+        document.goto_line(lineno)
+        document.create_source_mark(None, "2", document.get_iter_at_line(lineno))
+        self._context_box.set_context(context)
     
     def clear_markers(self):
         for doc in self.window.get_documents():
             start, end = doc.get_bounds()
             doc.remove_source_marks(start, end, "2")
         while Gtk.events_pending():
-            Gtk.main_iteration()
+            Gtk.main_iteration_do(False)
     
     def _attach(self, retry=0):
         if not self._debugger.attached:
