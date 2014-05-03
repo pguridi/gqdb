@@ -294,21 +294,31 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
     def mark_current_line(self, sender, filename, lineno, context):
         lineno -= 1
         current_doc = self.window.get_active_document().get_location()
-        if not current_doc:
-            return
-
+        
         found = False
-        # get the document
+        # Get the document
         for doc in self.window.get_documents():
             if doc.get_location() and doc.get_location().get_path() == filename:
                 found = True
                 doc.goto_line(lineno)
                 doc.create_source_mark(None, "2", doc.get_iter_at_line(lineno))
+        
+        gfile = Gio.File.new_for_path(filename)
         if not found:
             print("Doc not opened, lets open it..")
             print(filename)
-            gfile = Gio.File.new_for_path(filename)
-            self.window.create_tab_from_location(gfile, None, lineno, 0, False, True)
+            
+            self.window.create_tab_from_location(gfile, None, lineno + 1, 0, False, True)
+            location_tab = self.window.get_tab_from_location(gfile)
+            current_doc = location_tab.get_document()
+            #current_doc.goto_line(lineno)
+            while Gtk.events_pending():
+                Gtk.main_iteration()
+            print("Setting mark at line: ", lineno)
+            current_doc.create_source_mark(None, "2", current_doc.get_iter_at_line(lineno))
+        
+        tab = self.window.get_tab_from_location(gfile)
+        self.window.set_active_tab(tab)
 
         self._context_box.set_context(context)
         while Gtk.events_pending():
