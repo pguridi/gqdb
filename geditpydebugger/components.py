@@ -2,7 +2,8 @@ from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk
 import os
 MODULE_DIRECTORY = os.path.dirname(__file__)
 
-VARIABLE_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "greendot_big.gif"))
+VARIABLE_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, 
+    "images", "debugger", "variable.png"))
 
 def idle_add_decorator(func):
     def callback(*args):

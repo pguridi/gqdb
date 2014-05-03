@@ -50,13 +50,31 @@ for py in ['python2', 'python3']:
 
 print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 
-BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "breakpoint.png"))
-CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, "images", "anjuta-pcmark-16.png"))
+ICONS_DIR = os.path.join(MODULE_DIRECTORY, "images", "debugger")
 
-DEBUGGER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "bug-icon.png")))
-STEP_INTO_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-into-16.png")))
-STEP_OUT_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-out-16.png")))
-STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(MODULE_DIRECTORY, "images", "anjuta-step-over-16.png")))
+BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
+    "breakpoint.png"))
+BREAKPOINT_HIT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
+    "breakpoint_hit.png"))
+CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
+    "current_step.png"))
+DEBUGGER_CONSOLE_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
+    "debugger_console.png"))    
+
+DEBUGGER_CONSOLE_IMAGE = Gtk.Image.new_from_pixbuf(DEBUGGER_CONSOLE_PIXBUF)
+
+DEBUGGER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
+    "debug_executable24.png")))
+STEP_INTO_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
+"step_into_instruction24.png")))
+STEP_OUT_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
+"step_out_instruction24.png")))
+STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR,
+ "step_over_instruction24.png")))
+STOP_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
+    "stop.png")))
+STEP_CONTINUE_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
+    "run24.png")))
 
 menu_ui_str = """
 <ui>
@@ -117,8 +135,8 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
               ('StepInto', None, 'Step Into', 'F3', "Step Into", self.step_into_cb),
               ('StepOver', None, 'Step Over', 'F4', "Step Over", self.step_over_cb),
               ('StepOut', None, 'Step Out', 'F5', "Step Out", self.step_out_cb),
-              ('Continue', Gtk.STOCK_MEDIA_PLAY, 'Continue', 'F6', "Continue", self.step_continue),
-              ('Stop', Gtk.STOCK_STOP, 'Stop', '<Ctrl>F2', "Stop", self.stop_cb)
+              ('Continue', None, 'Continue', 'F6', "Continue", self.step_continue),
+              ('Stop', None, 'Stop', '<Ctrl>F2', "Stop", self.stop_cb)
             ]
             self._action_group.add_actions(actions)
             
@@ -135,10 +153,16 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             debug_action = self._action_group.get_action('Debug')
             debug_action.set_gicon(DEBUGGER_GIO_ICON)
             
+            continue_action = self._action_group.get_action('Continue')
+            continue_action.set_gicon(STEP_CONTINUE_GIO_ICON)
+            
+            stop_action = self._action_group.get_action('Stop')
+            stop_action.set_gicon(STOP_GIO_ICON)
+            
             # Insert the action group
             manager.insert_action_group(self._action_group, -1)
             self._ui_id = manager.add_ui_from_string(menu_ui_str)
-            panel.add_item(self._context_box, "debuggerpanel", "Python debugger", None)
+            panel.add_item(self._context_box, "debuggerpanel", "Python debugger", DEBUGGER_CONSOLE_IMAGE)
         else:
             panel.add_titled(self._context_box, "debuggerpanel", "Python debugger")
         panel.show_all()
