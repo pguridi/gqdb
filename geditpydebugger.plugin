@@ -2,8 +2,8 @@
 Loader=python3
 Module=geditpydebugger
 IAge=3
-Name=AAAAA Debugger
+Name=GqDB Python Debugger
 Description=A Python debugger for Gedit
 Authors=Pedro Guridi <pedro.guridi@gmail.com>
 Copyright=Copyright © 2014 Pedro Guridi <pedro.guridi@gmail.com>
-Website=http://www.gedit.org
+Website=https://github.com/pguridi/gqdb

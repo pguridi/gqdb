@@ -1,14 +1,12 @@
-from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk
+from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk, Gio
 import os
+from .image_utils import get_giofileicon_from_file, get_pixbuf_from_file, \
+    DEBUG_ICON, STEP_INTO_ICON, STEP_OUT_ICON, STEP_OVER_ICON, STOP_ICON, \
+    STEP_CONTINUE_ICON, VARIABLE_ICON
+
 MODULE_DIRECTORY = os.path.dirname(__file__)
 
-VARIABLE_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(MODULE_DIRECTORY, 
-    "images", "debugger", "variable.png"))
-
-def idle_add_decorator(func):
-    def callback(*args):
-        GLib.idle_add(func, *args)
-    return callback
+ICONS_DIR = os.path.join(MODULE_DIRECTORY, "images", "debugger")
 
 class InterpretersDialog:
 
@@ -37,35 +35,87 @@ class InterpretersDialog:
 
 class ContextBox(Gtk.HPaned):
 
-    def __init__(self):
+    def __init__(self, main_gui):
         Gtk.HPaned.__init__(self)
+        self.main_gui = main_gui
+
         builder = Gtk.Builder()
         builder.add_from_file(os.path.join(MODULE_DIRECTORY, "main.ui"))
+        builder.connect_signals(self)
 
         self._context_notebook = builder.get_object("context_notebook")
-        self._console_box = builder.get_object("console_box")
+        self._console_box = builder.get_object("leftbox")
         self._console_textview = builder.get_object("console_textview")
         self._variables_treestore = builder.get_object("variables_treestore")
 
+        self.debug_action = builder.get_object("debug_action")
+        self.debug_action.set_gicon(get_giofileicon_from_file(DEBUG_ICON))
+
+        self.step_into_action = builder.get_object("step_into_action")
+        self.step_into_action.set_gicon(get_giofileicon_from_file(STEP_INTO_ICON))
+
+        self.step_over_action = builder.get_object("step_over_action")
+        self.step_over_action.set_gicon(get_giofileicon_from_file(STEP_OVER_ICON))
+
+        self.step_out_action = builder.get_object("step_out_action")
+        self.step_out_action.set_gicon(get_giofileicon_from_file(STEP_OUT_ICON))
+
+        self.step_continue_action = builder.get_object("step_continue_action")
+        self.step_continue_action.set_gicon(get_giofileicon_from_file(STEP_CONTINUE_ICON))
+
+        self.step_stop_action = builder.get_object("step_stop_action")
+        self.step_stop_action.set_gicon(get_giofileicon_from_file(STOP_ICON))
+
         self.pack1(self._console_box, True, False)
         self.pack2(self._context_notebook, True, True)
+
+    def set_sensitive_buttons(self, val):
+        self.debug_action.set_sensitive(not val)
+        self.step_into_action.set_sensitive(val)
+        self.step_over_action.set_sensitive(val)
+        self.step_out_action.set_sensitive(val)
+        self.step_continue_action.set_sensitive(val)
+        self.step_stop_action.set_sensitive(val)
+        while Gtk.events_pending():
+            Gtk.main_iteration_do(False)
+
+    def debug_cb(self, widget):
+        self.main_gui.debug()
+
+    def stop_cb(self, widget):
+        self.main_gui.stop_cb()
+
+    def step_into_cb(self, widget):
+        self.main_gui.step_into_cb()
+
+    def step_over_cb(self, widget):
+        self.main_gui.step_over_cb()
+
+    def step_out_cb(self, widget):
+        self.main_gui.step_out_cb()
+
+    def step_continue_cb(self, widget):
+        self.main_gui.step_continue()
+
+    def on_breakpoint_cell_toggle(self, widget):
+        pass
 
     def clear(self):
         self._variables_treestore.clear()
 
     def set_context(self, context):
         self._variables_treestore.clear()
-        globals_it = self._variables_treestore.append(None, [VARIABLE_PIXBUF,
+        globals_it = self._variables_treestore.append(None, [get_pixbuf_from_file(VARIABLE_ICON),
                                                           "Globals", "Global variables"])
         for g in context['environment']['globals'].keys():
             val, vtype = context['environment']['globals'][g]
-            it = self._variables_treestore.append(globals_it, [VARIABLE_PIXBUF,
+            it = self._variables_treestore.append(globals_it, [get_pixbuf_from_file(VARIABLE_ICON),
                                                             g, vtype + ': ' + val])
 
         # now add locals
         for k in context['environment']['locals'].keys():
             val, vtype = context['environment']['locals'][k]
-            it = self._variables_treestore.append(None, [VARIABLE_PIXBUF,
+            it = self._variables_treestore.append(None, [get_pixbuf_from_file(VARIABLE_ICON),
                                                       k, vtype + ': ' + val])
     
     def write_stdout(self, msg):

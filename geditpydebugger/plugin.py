@@ -14,9 +14,10 @@ QDB_LAUNCHER_PATH = os.path.join(MODULE_DIRECTORY, "libs", "qdb_launcher.py")
 from .debugger_frontend import CallbackFrontend
 from .components import ContextBox, InterpretersDialog
 from .breakpoint import LineBreakpoint
+from .image_utils import get_pixbuf_from_file, CURRENT_STEP_PIXBUF, BREAKPOINT_PIXBUF, DEBUGGER_CONSOLE_IMAGE
 
 from distutils.version import StrictVersion as V
-from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio, GdkPixbuf
+from gi.repository import GObject, Gtk, GLib, Gdk, GtkSource, Gedit, Gio
 
 def get_version_from_str(version_str):
     return re.search('\d+(\.\d+)+', str(version_str)).group(0)
@@ -50,60 +51,6 @@ for py in ['python2', 'python3']:
 
 print("Detected python runtimes: %s" % str(PYTHON_RUNTIMES))
 
-ICONS_DIR = os.path.join(MODULE_DIRECTORY, "images", "debugger")
-
-BREAKPOINT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
-    "breakpoint.png"))
-BREAKPOINT_HIT_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
-    "breakpoint_hit.png"))
-CURRENT_STEP_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
-    "current_step.png"))
-DEBUGGER_CONSOLE_PIXBUF = GdkPixbuf.Pixbuf.new_from_file(os.path.join(ICONS_DIR, 
-    "debugger_console.png"))    
-
-DEBUGGER_CONSOLE_IMAGE = Gtk.Image.new_from_pixbuf(DEBUGGER_CONSOLE_PIXBUF)
-
-DEBUGGER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
-    "debug_executable24.png")))
-STEP_INTO_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
-"step_into_instruction24.png")))
-STEP_OUT_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
-"step_out_instruction24.png")))
-STEP_OVER_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR,
- "step_over_instruction24.png")))
-STOP_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
-    "stop.png")))
-STEP_CONTINUE_GIO_ICON = Gio.FileIcon.new(Gio.File.new_for_path(os.path.join(ICONS_DIR, 
-    "run24.png")))
-
-menu_ui_str = """
-<ui>
-  <menubar name="MenuBar">
-    <menu name="Debugger" action="Debugger">
-      <placeholder name="Debugger">
-        <menuitem action="Debug"/>
-        <menuitem action="StepInto"/>
-        <menuitem action="StepOver"/>
-        <menuitem action="StepOut"/>
-        <menuitem action="Continue"/>
-        <menuitem action="Stop"/>
-      </placeholder>
-    </menu>
-  </menubar>
-
-  <toolbar name="ToolBar">
-    <separator />
-    <placeholder name="DebugBar">
-      <toolitem action="Debug"/>
-      <toolitem action="StepInto"/>
-      <toolitem action="StepOver"/>
-      <toolitem action="StepOut"/>
-      <toolitem action="Continue"/>
-      <toolitem action="Stop"/>
-    </placeholder>
-  </toolbar>
-</ui>
-"""
 
 class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
     __gtype_name__ = "GqdbPluginActivatable"
@@ -117,54 +64,21 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._debugger = None
         self._breakpoints = set()
         self._gui_handlers = {}
+        self._action_group = None
+        self._context_box = None
 
     def do_activate(self):
         panel = self.window.get_bottom_panel()
-        self._context_box = ContextBox()
+        self._context_box = ContextBox(self)
         self._gui_handlers = {'write': self._context_box.write_stdout,
                     'mark-current-line' : self.mark_current_line,
                     'clear-interaction' : self._clear_interaction}
 
         if GEDIT_VERSION < V("3.12"):
-            manager = self.window.get_ui_manager()
-            # Create a new action group
-            self._action_group = Gtk.ActionGroup("DebuggerActions")
-            actions = [
-              ("Debugger", None, "Debugger", None, "Debugger", None),
-              ("Debug", None, "Debug","F2", "Debug", self.debug),
-              ('StepInto', None, 'Step Into', 'F3', "Step Into", self.step_into_cb),
-              ('StepOver', None, 'Step Over', 'F4', "Step Over", self.step_over_cb),
-              ('StepOut', None, 'Step Out', 'F5', "Step Out", self.step_out_cb),
-              ('Continue', None, 'Continue', 'F6', "Continue", self.step_continue),
-              ('Stop', None, 'Stop', '<Ctrl>F2', "Stop", self.stop_cb)
-            ]
-            self._action_group.add_actions(actions)
-            
-            # Set custom icons
-            step_into_action = self._action_group.get_action('StepInto')
-            step_into_action.set_gicon(STEP_INTO_GIO_ICON)
-            
-            step_out_action = self._action_group.get_action('StepOut')
-            step_out_action.set_gicon(STEP_OUT_GIO_ICON)
-            
-            step_over_action = self._action_group.get_action('StepOver')
-            step_over_action.set_gicon(STEP_OVER_GIO_ICON)
-            
-            debug_action = self._action_group.get_action('Debug')
-            debug_action.set_gicon(DEBUGGER_GIO_ICON)
-            
-            continue_action = self._action_group.get_action('Continue')
-            continue_action.set_gicon(STEP_CONTINUE_GIO_ICON)
-            
-            stop_action = self._action_group.get_action('Stop')
-            stop_action.set_gicon(STOP_GIO_ICON)
-            
-            # Insert the action group
-            manager.insert_action_group(self._action_group, -1)
-            self._ui_id = manager.add_ui_from_string(menu_ui_str)
             panel.add_item(self._context_box, "debuggerpanel", "Python debugger", DEBUGGER_CONSOLE_IMAGE)
         else:
             panel.add_titled(self._context_box, "debuggerpanel", "Python debugger")
+
         panel.show_all()
         
         hid = self.window.connect("active-tab-state-changed", self.on_tab_state_changed)
@@ -175,49 +89,35 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._handlers.append((self.window, hid))
         self.setDebugging(False)
     
-    def step_into_cb(self, cb):
+    def step_into_cb(self):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Step()
 
-    def step_over_cb(self, cb):
+    def step_over_cb(self):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Next()
             
-    def step_out_cb(self, cb):
+    def step_out_cb(self):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.StepReturn()
             
-    def step_continue(self, cb):
-        print("step_continue")
+    def step_continue(self):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Continue()
     
-    def stop_cb(self, cb):
+    def stop_cb(self):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Quit()
     
     def setDebugging(self, val):
-        print("Setting debugging to:", val)
         self._debugging = val
-        debug_action = self._action_group.get_action('Debug')
-        step_into_action = self._action_group.get_action('StepInto')
-        step_out_action = self._action_group.get_action('StepOut')
-        step_over_action = self._action_group.get_action('StepOver')
-        step_continue_action = self._action_group.get_action('Continue')
-        stop_action = self._action_group.get_action('Stop')
-        
-        debug_action.set_sensitive(not val)
-        step_into_action.set_sensitive(val)
-        step_out_action.set_sensitive(val)
-        step_over_action.set_sensitive(val)
-        step_continue_action.set_sensitive(val)
-        stop_action.set_sensitive(val)
-    
+        self._context_box.set_sensitive_buttons(val)
+
     def do_deactivate(self):
         self._gui_handlers = {}
         
@@ -251,11 +151,11 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         if view not in self._views:
             view.set_show_line_marks(True)
             source_attrs = GtkSource.MarkAttributes()
-            source_attrs.set_pixbuf(BREAKPOINT_PIXBUF)
+            source_attrs.set_pixbuf(get_pixbuf_from_file(BREAKPOINT_PIXBUF))
             view.set_mark_attributes("1", source_attrs, 1)
 
             source_attrs = GtkSource.MarkAttributes()
-            source_attrs.set_pixbuf(CURRENT_STEP_PIXBUF)
+            source_attrs.set_pixbuf(get_pixbuf_from_file(CURRENT_STEP_PIXBUF))
             view.set_mark_attributes("2", source_attrs, 2)
 
             view.connect('button-press-event', self.button_press_cb)
@@ -274,7 +174,6 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             current_doc = self.window.get_active_document().get_location()
             if not current_doc:
                 return
-            print(current_doc.get_path())
             current_doc_path = current_doc.get_path()
 
             x_buf, y_buf = view.window_to_buffer_coords(Gtk.TextWindowType.LEFT,
@@ -304,7 +203,6 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                     self._debugger.SetBreakpoint(current_doc_path, lineno)
 
     def _clear_interaction(self, sender=None):
-        print("Clear interaction")
         self.clear_markers()
         self._context_box.clear()
         self.setDebugging(False)
@@ -321,8 +219,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         
         document = document_tab.get_document()
         self.window.set_active_tab(document_tab)
-        
-        print("Setting mark at line: ", lineno)
+
         document.goto_line(lineno)
         document.create_source_mark(None, "2", document.get_iter_at_line(lineno))
         self._context_box.set_context(context)
