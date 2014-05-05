@@ -6,7 +6,7 @@ GqDB is a Python Debugger for Gedit 3.
 Although is still in alpha state, its goal is to provide all the features of modern debuggers within Gedit. 
 
 
-![screenshot](http://i.imgur.com/cuJkOL0.png "Logo Title Text 1")
+![screenshot](https://i.imgur.com/pGa00ut.png "GqDB")
 
 
 Features
@@ -19,6 +19,7 @@ Features
 * Toolbar buttons for step actions (Step into, Step Over, Step Out, Continue, Stop)
 
 * Supports Python 2.7 and Python 3 debugging.
+
 
 
 Installing
@@ -40,7 +41,7 @@ License and Dependencies
 
 GqDB is distributed under the MIT license. It relies on the following:
 
-* Gedit 3.10 (Gedit 3.12 support will be added soon).
+* Gedit 3.10 or newer.
 * Mariano Reingart's [QDB](https://github.com/reingart/qdb "QDB") Queues(Pipe)-based independent remote client-server Python Debugger
 
 Development Version
