@@ -40,6 +40,7 @@ License and Dependencies
 
 GqDB is distributed under the MIT license. It relies on the following:
 
+* Gedit 3.10 (Gedit 3.12 support will be added soon).
 * Mariano Reingart's [QDB](https://github.com/reingart/qdb "QDB") Queues(Pipe)-based independent remote client-server Python Debugger
 
 Development Version
