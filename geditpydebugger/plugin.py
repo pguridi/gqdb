@@ -114,9 +114,9 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         if self._debugger and self._debugger.attached:
             self._debugger.Quit()
 
-    def do_eval(self, arg):
+    def do_exec(self, arg):
         if self._debugger and self._debugger.attached:
-            return self._debugger.do_eval(arg)
+            return self._debugger.Exec(arg)
     
     def setDebugging(self, val):
         self._debugging = val

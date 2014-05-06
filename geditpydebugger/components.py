@@ -108,7 +108,7 @@ class ContextBox(Gtk.HPaned):
         widget.set_text("")
         print(cmd)
         try:
-            res = self.main_gui.do_eval(cmd)
+            res = self.main_gui.do_exec(cmd)
             self.write_stdout(res + "\n")
         except qdb.RPCError as e:
             print("invalid cmd")

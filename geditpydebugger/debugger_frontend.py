@@ -10,6 +10,7 @@ import threading
 import sys
 
 print(sys.path)
+import qdb
 from qdb import Frontend
 
 from .breakpoint import LineBreakpoint
@@ -420,37 +421,34 @@ class CallbackFrontend(Frontend):
 
     # methods used by the shell:
 
-#    def Exec(self, statement, write=None, readline=None):
-#        "Exec source code statement in debugger context (returns string)"
-#        if statement == "" or not self.attached:
-#            # 1. shell seems to call Exec without statement on init
-#            # 2. if not debuging, exec on the current local wx shell
-#            pass  
-#        elif not self.interacting:
-#            #wx.Bell()
-#            return u'*** no debugger interaction (stop first!)'
-#        else:
-#            old_write = self.write
-#            old_readline = self.readline
-#            try:
-#                # replace console function
-#                if write:
-#                    self.write = write
-#                if readline:
-#                    self.readline = readline
-#                self.post_event = None   # ignore one interaction notification
-#                # execute the statement in the remote debugger:
-#                ret = self.do_exec(statement)
-#                if isinstance(ret, basestring):
-#                    return ret
-#                else:
-#                    return str(ret)
-#            except qdb.RPCError, e:
-#                return u'*** %s' % unicode(e)
-#            finally:
-#                self.write = old_write
-#                self.readline = old_readline
-#        return None
+    def Exec(self, statement, write=None, readline=None):
+        "Exec source code statement in debugger context (returns string)"
+        if statement == "" or not self.attached:
+            # 1. shell seems to call Exec without statement on init
+            # 2. if not debuging, exec on the current local wx shell
+            pass
+        elif not self.interacting:
+            return '*** no debugger interaction (stop first!)'
+        else:
+            old_write = self.write
+            old_readline = self.readline
+            try:
+                # replace console function
+                if write:
+                    self.write = write
+                if readline:
+                    self.readline = readline
+                self.post_event = None   # ignore one interaction notification
+                # execute the statement in the remote debugger:
+                ret = self.do_exec(statement)
+                return ret
+            except qdb.RPCError as e:
+                print("error: ", e)
+                return str(e)
+            finally:
+                self.write = old_write
+                self.readline = old_readline
+        return None
 
 #    def GetAutoCompleteList(self, expr=''):
 #        "Return list of auto-completion options for an expression"
