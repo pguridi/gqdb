@@ -2,7 +2,7 @@ from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk, Gio
 import os
 from .image_utils import get_giofileicon_from_file, get_pixbuf_from_file, \
     DEBUG_ICON, STEP_INTO_ICON, STEP_OUT_ICON, STEP_OVER_ICON, STOP_ICON, \
-    STEP_CONTINUE_ICON, VARIABLE_ICON
+    STEP_CONTINUE_ICON, VARIABLE_ICON, BREAKPOINT_PIXBUF
 
 MODULE_DIRECTORY = os.path.dirname(__file__)
 
@@ -48,6 +48,7 @@ class ContextBox(Gtk.HPaned):
         self._console_textview = builder.get_object("console_textview")
         self._variables_treestore = builder.get_object("variables_treestore")
         self._callstack_list_store = builder.get_object("callstack_list_store")
+        self._breakpoints_liststore = builder.get_object("breakpoints_liststore")
 
         self.debug_action = builder.get_object("debug_action")
         self.debug_action.set_gicon(get_giofileicon_from_file(DEBUG_ICON))
@@ -119,6 +120,16 @@ class ContextBox(Gtk.HPaned):
             val, vtype = context['environment']['locals'][k]
             it = self._variables_treestore.append(None, [get_pixbuf_from_file(VARIABLE_ICON),
                                                       k, vtype + ': ' + val])
+
+    def add_breakpoint(self, bk):
+        self._breakpoints_liststore.append([True, str(bk.file) + ':' + str(bk.line),
+                                            get_pixbuf_from_file(BREAKPOINT_PIXBUF), bk])
+
+    def remove_breakpoint(self, bk):
+        for row in self._breakpoints_liststore:
+            if row[3] == bk:
+                self._breakpoints_liststore.remove(row.iter)
+                break
 
     def BuildCallStackList(self, items):
         self._callstack_list_store.clear()

@@ -181,6 +181,7 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
             # get line bounds
             line_start = view.get_line_at_y(y_buf)[0]
             lineno = line_start.get_line() + 1
+            breakpoint = LineBreakpoint(current_doc_path, lineno, 0)
 
             # get the markers already in the line
             mark_list = buf.get_source_marks_at_line(line_start.get_line(), mark_category)
@@ -189,16 +190,16 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
                 if m.get_category() == mark_category:
                     # a marker was found, so delete it
                     buf.delete_mark(m)
-                    self._breakpoints.remove(LineBreakpoint(current_doc_path, lineno, 0))
+                    self._context_box.remove_breakpoint(breakpoint)
+                    self._breakpoints.remove(breakpoint)
                     if self._debugger and self._debugger.attached:
                         self._debugger.ClearBreakpoint(current_doc_path, lineno)
                     break
             else:
                 # no marker found, create one
                 buf.create_source_mark(None, mark_category, line_start)
-                #self._breakpoints_liststore.append([True, 'Line: ' + str(line_start.get_line() + 1),
-                #                                    self._breakpoint_pixbuf])
-                self._breakpoints.add(LineBreakpoint(current_doc_path, lineno, 0))                
+                self._breakpoints.add(breakpoint)
+                self._context_box.add_breakpoint(breakpoint)
                 if self._debugger and self._debugger.attached:
                     self._debugger.SetBreakpoint(current_doc_path, lineno)
 
