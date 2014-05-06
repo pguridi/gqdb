@@ -104,6 +104,7 @@ class ContextBox(Gtk.HPaned):
 
     def clear(self):
         self._variables_treestore.clear()
+        self._callstack_list_store.clear()
 
     def set_context(self, context):
         self.BuildCallStackList(context["call_stack"])
