@@ -32,8 +32,7 @@ Open Gedit and activate the plugin.
 Getting Started
 ---------------
 
-To start debugging, simply click on the Debug button on the toolbar, or the option from the menu.
-Then select which Python interpreter to use for debugger.
+To start debugging, just click on the Debug button in the toolbar, and choose the Python interpreter version to use.
 
 
 License and Dependencies
