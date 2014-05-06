@@ -125,7 +125,7 @@ class CallbackFrontend(Frontend):
         try:
             while True:
                 if self.attached and self.pipe:
-                    time.sleep(0.05)
+                    time.sleep(0.01)
                     while self.pipe.poll():
                         self.run()
         except EOFError as e:

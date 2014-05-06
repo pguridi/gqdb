@@ -133,8 +133,12 @@ class ContextBox(Gtk.HPaned):
 
     def BuildCallStackList(self, items):
         self._callstack_list_store.clear()
-        for item in items:
-            self._callstack_list_store.append([str(i).strip() for i in item])
+        for i, val in enumerate(items[1:]):
+            filepath, filename = os.path.split(val[0])
+            line = val[1]
+            func = val[4].strip()
+            #print(filepath, line, func)
+            self._callstack_list_store.append([str(i), filename, str(line), func, filepath])
 
     def write_stdout(self, msg):
         self._console_textbuffer = self._console_textview.get_buffer()

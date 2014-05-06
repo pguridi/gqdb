@@ -16,15 +16,15 @@
   </object>
   <object class="GtkListStore" id="callstack_list_store">
     <columns>
+      <!-- column-name frame -->
+      <column type="gchararray"/>
       <!-- column-name filename -->
       <column type="gchararray"/>
-      <!-- column-name lineno -->
+      <!-- column-name line -->
       <column type="gchararray"/>
-      <!-- column-name flags -->
+      <!-- column-name function -->
       <column type="gchararray"/>
-      <!-- column-name current -->
-      <column type="gchararray"/>
-      <!-- column-name source -->
+      <!-- column-name path -->
       <column type="gchararray"/>
     </columns>
   </object>
@@ -404,6 +404,7 @@
     </child>
     <child>
       <object class="GtkScrolledWindow" id="scrolledwindow4">
+        <property name="height_request">150</property>
         <property name="visible">True</property>
         <property name="can_focus">True</property>
         <property name="shadow_type">in</property>
@@ -417,11 +418,10 @@
               <object class="GtkTreeSelection" id="treeview-selection5"/>
             </child>
             <child>
-              <object class="GtkTreeViewColumn" id="treeviewcolumn5">
-                <property name="resizable">True</property>
-                <property name="title" translatable="yes">Name</property>
+              <object class="GtkTreeViewColumn" id="treeviewcolumn2">
+                <property name="title" translatable="yes">Frame</property>
                 <child>
-                  <object class="GtkCellRendererText" id="cellrenderertext5"/>
+                  <object class="GtkCellRendererText" id="cellrenderertext6"/>
                   <attributes>
                     <attribute name="text">0</attribute>
                   </attributes>
@@ -429,10 +429,11 @@
               </object>
             </child>
             <child>
-              <object class="GtkTreeViewColumn" id="treeviewcolumn6">
-                <property name="title" translatable="yes">Lineno</property>
+              <object class="GtkTreeViewColumn" id="treeviewcolumn5">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes">Filename</property>
                 <child>
-                  <object class="GtkCellRendererText" id="cellrenderertext7"/>
+                  <object class="GtkCellRendererText" id="cellrenderertext5"/>
                   <attributes>
                     <attribute name="text">1</attribute>
                   </attributes>
@@ -440,10 +441,10 @@
               </object>
             </child>
             <child>
-              <object class="GtkTreeViewColumn" id="treeviewcolumn7">
-                <property name="title" translatable="yes">Flags</property>
+              <object class="GtkTreeViewColumn" id="treeviewcolumn6">
+                <property name="title" translatable="yes">Line</property>
                 <child>
-                  <object class="GtkCellRendererText" id="cellrenderertext8"/>
+                  <object class="GtkCellRendererText" id="cellrenderertext7"/>
                   <attributes>
                     <attribute name="text">2</attribute>
                   </attributes>
@@ -451,10 +452,10 @@
               </object>
             </child>
             <child>
-              <object class="GtkTreeViewColumn" id="treeviewcolumn8">
-                <property name="title" translatable="yes">Current</property>
+              <object class="GtkTreeViewColumn" id="treeviewcolumn9">
+                <property name="title" translatable="yes">Function</property>
                 <child>
-                  <object class="GtkCellRendererText" id="cellrenderertext9"/>
+                  <object class="GtkCellRendererText" id="cellrenderertext10"/>
                   <attributes>
                     <attribute name="text">3</attribute>
                   </attributes>
@@ -462,10 +463,10 @@
               </object>
             </child>
             <child>
-              <object class="GtkTreeViewColumn" id="treeviewcolumn9">
-                <property name="title" translatable="yes">Source</property>
+              <object class="GtkTreeViewColumn" id="treeviewcolumn7">
+                <property name="title" translatable="yes">Path</property>
                 <child>
-                  <object class="GtkCellRendererText" id="cellrenderertext10"/>
+                  <object class="GtkCellRendererText" id="cellrenderertext8"/>
                   <attributes>
                     <attribute name="text">4</attribute>
                   </attributes>
