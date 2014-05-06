@@ -27,3 +27,40 @@ class JsonListener(Listener):
 
 def JsonClient(*args, **kwds):
     return ConnectionWrapper(Client(*args, **kwds))
+
+
+# Ugly patching to fixe py2<->py3 multiprocessing compatibility
+# Reference: http://bugs.python.org/review/17258/patch/7414/27889
+
+from py3compat import PY3
+from multiprocessing import connection, AuthenticationError
+from multiprocessing.connection import CHALLENGE, WELCOME, \
+    MESSAGE_LENGTH, FAILURE
+import os
+import hashlib
+
+def answer_challenge(conn, authkey):
+    import hmac
+    message = conn.recv_bytes(256)         # reject large message
+    assert message[:len(CHALLENGE)] == CHALLENGE, 'message = %r' % message
+    message = message[len(CHALLENGE):]
+    digest = hmac.new(authkey, message, hashlib.sha256).digest()
+    conn.send_bytes(digest)
+    response = conn.recv_bytes(256)        # reject large message
+    if response != WELCOME:
+        raise AuthenticationError('digest sent was rejected')
+
+def deliver_challenge(conn, authkey):
+    import hmac
+    message = os.urandom(MESSAGE_LENGTH)
+    conn.send_bytes(CHALLENGE + message)
+    digest = hmac.new(authkey, message, hashlib.sha256).digest()
+    response = conn.recv_bytes(256)        # reject large message
+    if response == digest:
+        conn.send_bytes(WELCOME)
+    else:
+        conn.send_bytes(FAILURE)
+        raise AuthenticationError('digest received was wrong')
+
+connection.deliver_challenge = deliver_challenge
+connection.answer_challenge = answer_challenge
