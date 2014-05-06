@@ -47,6 +47,7 @@ class ContextBox(Gtk.HPaned):
         self._console_box = builder.get_object("leftbox")
         self._console_textview = builder.get_object("console_textview")
         self._variables_treestore = builder.get_object("variables_treestore")
+        self._callstack_list_store = builder.get_object("callstack_list_store")
 
         self.debug_action = builder.get_object("debug_action")
         self.debug_action.set_gicon(get_giofileicon_from_file(DEBUG_ICON))
@@ -104,6 +105,7 @@ class ContextBox(Gtk.HPaned):
         self._variables_treestore.clear()
 
     def set_context(self, context):
+        self.BuildCallStackList(context["call_stack"])
         self._variables_treestore.clear()
         globals_it = self._variables_treestore.append(None, [get_pixbuf_from_file(VARIABLE_ICON),
                                                           "Globals", "Global variables"])
@@ -117,7 +119,12 @@ class ContextBox(Gtk.HPaned):
             val, vtype = context['environment']['locals'][k]
             it = self._variables_treestore.append(None, [get_pixbuf_from_file(VARIABLE_ICON),
                                                       k, vtype + ': ' + val])
-    
+
+    def BuildCallStackList(self, items):
+        self._callstack_list_store.clear()
+        for item in items:
+            self._callstack_list_store.append([str(i).strip() for i in item])
+
     def write_stdout(self, msg):
         self._console_textbuffer = self._console_textview.get_buffer()
         start, end = self._console_textbuffer.get_bounds()
