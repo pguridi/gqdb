@@ -113,6 +113,10 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self.clear_markers()
         if self._debugger and self._debugger.attached:
             self._debugger.Quit()
+
+    def do_eval(self, arg):
+        if self._debugger and self._debugger.attached:
+            return self._debugger.do_eval(arg)
     
     def setDebugging(self, val):
         self._debugging = val

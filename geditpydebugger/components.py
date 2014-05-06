@@ -1,5 +1,6 @@
 from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk, Gio
 import os
+import qdb
 from .image_utils import get_giofileicon_from_file, get_pixbuf_from_file, \
     DEBUG_ICON, STEP_INTO_ICON, STEP_OUT_ICON, STEP_OVER_ICON, STOP_ICON, \
     STEP_CONTINUE_ICON, VARIABLE_ICON, BREAKPOINT_PIXBUF
@@ -101,6 +102,17 @@ class ContextBox(Gtk.HPaned):
 
     def on_breakpoint_cell_toggle(self, widget):
         pass
+
+    def on_command_entry_activated(self, widget):
+        cmd = widget.get_text()
+        widget.set_text("")
+        print(cmd)
+        try:
+            res = self.main_gui.do_eval(cmd)
+            self.write_stdout(res + "\n")
+        except qdb.RPCError as e:
+            print("invalid cmd")
+            print(e)
 
     def clear(self):
         self._variables_treestore.clear()
