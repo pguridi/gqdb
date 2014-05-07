@@ -128,6 +128,8 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         for obj, hid in self._handlers:
             obj.disconnect(hid)
         self._handlers = None
+        if self._debugger:
+            self._debugger.Quit()
         self.window.remove_action("gqdb")
         panel = self.window.get_bottom_panel()
         panel.remove(self._context_box)

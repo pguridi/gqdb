@@ -1,6 +1,8 @@
 from gi.repository import Gtk, GtkSource, GLib, GdkPixbuf, Gdk, Gio
 import os
 import qdb
+
+from .console import ConsoleWidget
 from .image_utils import get_giofileicon_from_file, get_pixbuf_from_file, \
     DEBUG_ICON, STEP_INTO_ICON, STEP_OUT_ICON, STEP_OVER_ICON, STOP_ICON, \
     STEP_CONTINUE_ICON, VARIABLE_ICON, BREAKPOINT_PIXBUF
@@ -46,7 +48,9 @@ class ContextBox(Gtk.HPaned):
 
         self._context_notebook = builder.get_object("context_notebook")
         self._console_box = builder.get_object("leftbox")
-        self._console_textview = builder.get_object("console_textview")
+        self._console = ConsoleWidget(self.main_gui)
+        self._console_box.pack_start(self._console, True, True, 0)
+
         self._variables_treestore = builder.get_object("variables_treestore")
         self._callstack_list_store = builder.get_object("callstack_list_store")
         self._breakpoints_liststore = builder.get_object("breakpoints_liststore")
@@ -103,17 +107,6 @@ class ContextBox(Gtk.HPaned):
     def on_breakpoint_cell_toggle(self, widget):
         pass
 
-    def on_command_entry_activated(self, widget):
-        cmd = widget.get_text()
-        widget.set_text("")
-        print(cmd)
-        try:
-            res = self.main_gui.do_exec(cmd)
-            self.write_stdout(res + "\n")
-        except qdb.RPCError as e:
-            print("invalid cmd")
-            print(e)
-
     def clear(self):
         self._variables_treestore.clear()
         self._callstack_list_store.clear()
@@ -146,18 +139,14 @@ class ContextBox(Gtk.HPaned):
 
     def BuildCallStackList(self, items):
         self._callstack_list_store.clear()
-        for i, val in enumerate(items[1:]):
-            filepath, filename = os.path.split(val[0])
-            line = val[1]
-            func = val[4].strip()
-            #print(filepath, line, func)
-            self._callstack_list_store.append([str(i), filename, str(line), func, filepath])
+        stack = items[1:]
+        for i in range(0, len(stack)):
+            row = stack.pop()
+            filepath, filename = os.path.split(row[0])
+            line = row[1]
+            func = row[4].strip()
+            self._callstack_list_store.append([str(i), filename, str(line), func, row[0]])
 
     def write_stdout(self, msg):
-        self._console_textbuffer = self._console_textview.get_buffer()
-        start, end = self._console_textbuffer.get_bounds()
-        self._console_textbuffer.insert(end, msg)
-
-        it = self._console_textbuffer.get_iter_at_line(self._console_textbuffer.get_line_count() - 1)
-        tmark = self._console_textbuffer.create_mark("eot", it, False)
-        self._console_textview.scroll_to_mark(tmark, 0, False, 0, 0)
+        self._console.writeToOutputBuffer(msg)
+        return
