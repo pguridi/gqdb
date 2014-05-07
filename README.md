@@ -6,7 +6,7 @@ GqDB is a Python Debugger for Gedit 3.
 Although is still in alpha state, its goal is to provide all the features of modern debuggers within Gedit. 
 
 
-![screenshot](https://i.imgur.com/pGa00ut.png "GqDB")
+![screenshot](https://i.imgur.com/PkSqLxo.png "GqDB")
 
 
 Features
