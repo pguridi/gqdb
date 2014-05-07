@@ -361,7 +361,7 @@ class Qdb(bdb.Bdb):
             ret = pydoc.cram(repr(ret), 255)
         return ret
 
-    def do_exec(self, arg, safe=True):
+    def do_exec(self, arg, safe=False):
         if not self.frame:
             ret = RPCError("No current frame available to exec")
         else:

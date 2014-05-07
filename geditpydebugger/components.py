@@ -107,17 +107,6 @@ class ContextBox(Gtk.HPaned):
     def on_breakpoint_cell_toggle(self, widget):
         pass
 
-    def on_command_entry_activated(self, widget):
-        cmd = widget.get_text()
-        widget.set_text("")
-        print(cmd)
-        try:
-            res = self.main_gui.do_exec(cmd)
-            self.write_stdout(res + "\n")
-        except qdb.RPCError as e:
-            print("invalid cmd")
-            print(e)
-
     def clear(self):
         self._variables_treestore.clear()
         self._callstack_list_store.clear()
@@ -150,12 +139,13 @@ class ContextBox(Gtk.HPaned):
 
     def BuildCallStackList(self, items):
         self._callstack_list_store.clear()
-        for i, val in enumerate(items[1:]):
-            filepath, filename = os.path.split(val[0])
-            line = val[1]
-            func = val[4].strip()
-            #print(filepath, line, func)
-            self._callstack_list_store.append([str(i), filename, str(line), func, filepath])
+        stack = items[1:]
+        for i in range(0, len(stack)):
+            row = stack.pop()
+            filepath, filename = os.path.split(row[0])
+            line = row[1]
+            func = row[4].strip()
+            self._callstack_list_store.append([str(i), filename, str(line), func, row[0]])
 
     def write_stdout(self, msg):
         self._console.writeToOutputBuffer(msg)

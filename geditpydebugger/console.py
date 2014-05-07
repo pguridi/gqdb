@@ -118,7 +118,8 @@ class ConsoleWidget(Gtk.VBox):
     def Execute(self, cmd):
         try:
             res = self.main_gui.do_exec(cmd)
-            self.writeToOutputBuffer(res + "\n")
+            if res != 'None':
+                self.writeToOutputBuffer(res + "\n")
         except Exception as e:
             print("invalid cmd")
             print(e)
