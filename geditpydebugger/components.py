@@ -104,8 +104,11 @@ class ContextBox(Gtk.HPaned):
     def step_continue_cb(self, widget):
         self.main_gui.step_continue()
 
-    def on_breakpoint_cell_toggle(self, widget):
-        pass
+    def on_breakpoint_cell_toggle(self, widget, row, col):
+        model = widget.get_model()
+        bk = model[row][3]
+        self.main_gui.goto_file_lineno(bk.file, bk.line)
+        print(bk.file, bk.line)
 
     def clear(self):
         self._variables_treestore.clear()

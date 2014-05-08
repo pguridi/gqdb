@@ -214,17 +214,25 @@ class GqdbPluginActivatable(GObject.Object, Gedit.WindowActivatable):
         self._context_box.clear()
         self.setDebugging(False)
 
-    def mark_current_line(self, filename, lineno, context):
-        lineno -= 1
-        
+    def get_document_for_file(self, filename):
         gfile = Gio.File.new_for_path(filename)
         document_tab = self.window.get_tab_from_location(gfile)
         if not document_tab:
             # no tab opened with this document, lets open it
-            self.window.create_tab_from_location(gfile, None, lineno + 1, 0, False, True)
-            document_tab = self.window.get_tab_from_location(gfile)
-        
-        document = document_tab.get_document()
+            self.window.create_tab_from_location(gfile, None, 0, 0, False, True)
+        document_tab = self.window.get_tab_from_location(gfile)
+        return document_tab, document_tab.get_document()
+
+    def goto_file_lineno(self, filename, lineno):
+        lineno -= 1
+        document_tab, document = self.get_document_for_file(filename)
+        self.window.set_active_tab(document_tab)
+        document.goto_line(lineno)
+
+    def mark_current_line(self, filename, lineno, context):
+        lineno -= 1
+        document_tab, document = self.get_document_for_file(filename)
+
         self.window.set_active_tab(document_tab)
 
         document.goto_line(lineno)
